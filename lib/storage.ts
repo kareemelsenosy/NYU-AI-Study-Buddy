@@ -8,10 +8,10 @@ export async function uploadFile(file: File): Promise<FileMetadata> {
     throw new Error(`File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
   }
 
-  // Support both BLOB_READ_WRITE_TOKEN and Files_READ_WRITE_TOKEN
-  const token = process.env.BLOB_READ_WRITE_TOKEN || process.env.Files_READ_WRITE_TOKEN;
+  // Support Files_READ_WRITE_TOKEN (Vercel's default) and BLOB_READ_WRITE_TOKEN
+  const token = process.env.Files_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
-    throw new Error('BLOB_READ_WRITE_TOKEN is not set. Please add it to Vercel environment variables.');
+    throw new Error('Files_READ_WRITE_TOKEN or BLOB_READ_WRITE_TOKEN is not set. Please add it to Vercel environment variables.');
   }
 
   // Log token info for debugging (first few chars only)
@@ -45,13 +45,10 @@ export async function uploadFiles(files: File[]): Promise<FileMetadata[]> {
 }
 
 export async function listFiles(): Promise<FileMetadata[]> {
-  // Support multiple token names
-  const token = process.env.BLOB_READ_WRITE_TOKEN 
-    || process.env.Files_READ_WRITE_TOKEN
-    || process.env.BLOB_TOKEN
-    || process.env.VERCEL_BLOB_TOKEN;
+  // Support Files_READ_WRITE_TOKEN (Vercel's default) and BLOB_READ_WRITE_TOKEN
+  const token = process.env.Files_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
-    console.warn('BLOB_READ_WRITE_TOKEN not set, returning empty file list');
+    console.warn('Files_READ_WRITE_TOKEN not set, returning empty file list');
     return [];
   }
 
@@ -83,13 +80,10 @@ export async function listFiles(): Promise<FileMetadata[]> {
 }
 
 export async function deleteFile(fileId: string): Promise<void> {
-  // Support multiple token names
-  const token = process.env.BLOB_READ_WRITE_TOKEN 
-    || process.env.Files_READ_WRITE_TOKEN
-    || process.env.BLOB_TOKEN
-    || process.env.VERCEL_BLOB_TOKEN;
+  // Support Files_READ_WRITE_TOKEN (Vercel's default) and BLOB_READ_WRITE_TOKEN
+  const token = process.env.Files_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
-    throw new Error('BLOB_READ_WRITE_TOKEN is not set. Please add it to Vercel environment variables.');
+    throw new Error('Files_READ_WRITE_TOKEN or BLOB_READ_WRITE_TOKEN is not set. Please add it to Vercel environment variables.');
   }
 
   await del(fileId, {
