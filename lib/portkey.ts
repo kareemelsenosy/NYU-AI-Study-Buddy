@@ -23,12 +23,8 @@ export function getPortkeyClient(): Portkey {
   return getPortkey();
 }
 
-// Export portkey for backward compatibility - but use getPortkeyClient() in API routes
-export const portkey = {
-  get chat() {
-    return getPortkey().chat;
-  },
-} as Portkey;
+// Don't export portkey directly - it causes build-time evaluation
+// Always use getPortkeyClient() instead
 
 // Model configuration - can be overridden via environment variable
 export const AI_MODEL = process.env.AI_MODEL || '@gpt-4o/gpt-4o';
