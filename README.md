@@ -80,21 +80,29 @@ ai-study-buddy/
 
 ## 🐛 Troubleshooting
 
+### Check Environment Variables
+Visit these endpoints to diagnose issues:
+- `/api/health` - Check if environment variables are loaded
+- `/api/test` - Test Portkey connection
+
 ### File Upload Not Working
 - Check `Files_READ_WRITE_TOKEN` is set in Vercel
 - Verify token is for READ-WRITE (not read-only)
 - Check Vercel function logs for errors
+- Visit `/api/health` to verify token is loaded
 
 ### AI Chat Not Working
 - Verify `PORTKEY_API_KEY` is set correctly
 - Check `PORTKEY_BASE_URL` matches your gateway
-- Verify `AI_MODEL` is correct
+- Verify `AI_MODEL` is correct (should be `@gpt-4o/gpt-4o` for NYU gateway)
+- Visit `/api/test` to test Portkey connection
 - Check Vercel function logs for detailed errors
 
 ### Build Errors
 - Ensure all environment variables are set
 - Check Node.js version (18+)
 - Run `npm install` again
+- After adding env vars in Vercel, **redeploy** the project
 
 ## 📝 License
 
