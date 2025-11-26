@@ -10,9 +10,17 @@ function getPortkey(): Portkey {
     if (!apiKey) {
       throw new Error('PORTKEY_API_KEY is not set in environment variables');
     }
+    
+    const baseURL = process.env.PORTKEY_BASE_URL || "https://ai-gateway.apps.cloud.rt.nyu.edu/v1";
+    console.log('Initializing Portkey with:', {
+      baseURL,
+      apiKeyPrefix: apiKey.substring(0, 10) + '...',
+      hasApiKey: !!apiKey,
+    });
+    
     portkeyInstance = new Portkey({
-      baseURL: process.env.PORTKEY_BASE_URL || "https://ai-gateway.apps.cloud.rt.nyu.edu/v1",
       apiKey: apiKey,
+      ...(baseURL && { baseURL }), // Only add baseURL if it's set
     });
   }
   return portkeyInstance;

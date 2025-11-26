@@ -120,6 +120,10 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           console.log('Initializing Portkey client...');
+          console.log('AI_MODEL:', AI_MODEL);
+          console.log('PORTKEY_BASE_URL:', process.env.PORTKEY_BASE_URL);
+          console.log('PORTKEY_API_KEY exists:', !!process.env.PORTKEY_API_KEY);
+          
           const portkey = getPortkeyClient();
           console.log('Portkey client initialized, making API call...');
           
@@ -130,6 +134,8 @@ export async function POST(req: NextRequest) {
             temperature: 0.3,
             stream: true,
           });
+          
+          console.log('Portkey API response received, starting stream...');
 
           console.log('Portkey API call started, streaming response...');
           let hasContent = false;
