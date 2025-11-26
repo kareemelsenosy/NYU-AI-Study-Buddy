@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getPortkeyClient, SYSTEM_PROMPT, AI_MODEL } from '@/lib/portkey';
+import { getPortkeyClient, SYSTEM_PROMPT, AI_MODEL, callPortkeyDirectly } from '@/lib/portkey';
 import { listFiles } from '@/lib/storage';
 import { extractTextFromFile } from '@/lib/file-extractors';
 import { ChatRequest, Message } from '@/types';
@@ -124,24 +124,104 @@ export async function POST(req: NextRequest) {
           console.log('PORTKEY_BASE_URL:', process.env.PORTKEY_BASE_URL);
           console.log('PORTKEY_API_KEY exists:', !!process.env.PORTKEY_API_KEY);
           
-          const portkey = getPortkeyClient();
-          console.log('Portkey client initialized, making API call...');
+          let response: any;
           
-          const response = await portkey.chat.completions.create({
-            model: AI_MODEL,
-            messages: messages as any,
-            max_tokens: 1500,
-            temperature: 0.3,
-            stream: true,
-          });
+          try {
+            // Try using Portkey SDK first
+            const portkey = getPortkeyClient();
+            console.log('Portkey client initialized, making API call via SDK...');
+            
+            response = await portkey.chat.completions.create({
+              model: AI_MODEL,
+              messages: messages as any,
+              max_tokens: 1500,
+              temperature: 0.3,
+              stream: true,
+            });
+            
+            console.log('Portkey SDK call successful, starting stream...');
+          } catch (sdkError: any) {
+            // If SDK fails with 404, try direct fetch
+            console.error('Portkey SDK error:', sdkError);
+            if (sdkError?.message?.includes('404') || sdkError?.status === 404 || sdkError?.message?.includes('not found')) {
+              console.log('Portkey SDK returned 404, trying direct fetch to NYU gateway...');
+              
+              const apiKey = process.env.PORTKEY_API_KEY;
+              const baseURL = process.env.PORTKEY_BASE_URL || "https://ai-gateway.apps.cloud.rt.nyu.edu/v1";
+              const url = `${baseURL}/chat/completions`;
+              
+              console.log('Direct fetch URL:', url);
+              
+              const fetchResponse = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: AI_MODEL,
+                  messages: messages,
+                  max_tokens: 1500,
+                  temperature: 0.3,
+                  stream: true,
+                }),
+              });
+              
+              if (!fetchResponse.ok) {
+                const errorText = await fetchResponse.text();
+                throw new Error(`Direct fetch failed (${fetchResponse.status}): ${errorText}`);
+              }
+              
+              if (!fetchResponse.body) {
+                throw new Error('No response body from direct fetch');
+              }
+              
+              // Convert fetch response to async iterator compatible with Portkey SDK format
+              const reader = fetchResponse.body.getReader();
+              const decoder = new TextDecoder();
+              
+              response = {
+                async *[Symbol.asyncIterator]() {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                      if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+                        try {
+                          const jsonStr = line.slice(6).trim();
+                          if (jsonStr && jsonStr !== '[DONE]') {
+                            const data = JSON.parse(jsonStr);
+                            yield { 
+                              choices: [{ 
+                                delta: { 
+                                  content: data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content || '' 
+                                } 
+                              }] 
+                            };
+                          }
+                        } catch (e) {
+                          // Skip invalid JSON lines
+                        }
+                      }
+                    }
+                  }
+                }
+              };
+              
+              console.log('Direct fetch successful, using streaming response');
+            } else {
+              throw sdkError;
+            }
+          }
           
-          console.log('Portkey API response received, starting stream...');
-
-          console.log('Portkey API call started, streaming response...');
           let hasContent = false;
 
           for await (const chunk of response) {
-            const content = chunk.choices[0]?.delta?.content || '';
+            const content = chunk.choices?.[0]?.delta?.content || '';
             if (content) {
               hasContent = true;
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`));
