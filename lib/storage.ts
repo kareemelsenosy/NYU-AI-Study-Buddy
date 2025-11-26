@@ -55,8 +55,11 @@ export async function uploadFiles(files: File[]): Promise<FileMetadata[]> {
 }
 
 export async function listFiles(): Promise<FileMetadata[]> {
-  // Support both BLOB_READ_WRITE_TOKEN and Files_READ_WRITE_TOKEN
-  const token = process.env.BLOB_READ_WRITE_TOKEN || process.env.Files_READ_WRITE_TOKEN;
+  // Support multiple token names
+  const token = process.env.BLOB_READ_WRITE_TOKEN 
+    || process.env.Files_READ_WRITE_TOKEN
+    || process.env.BLOB_TOKEN
+    || process.env.VERCEL_BLOB_TOKEN;
   if (!token) {
     console.warn('BLOB_READ_WRITE_TOKEN not set, returning empty file list');
     return [];
@@ -90,8 +93,11 @@ export async function listFiles(): Promise<FileMetadata[]> {
 }
 
 export async function deleteFile(fileId: string): Promise<void> {
-  // Support both BLOB_READ_WRITE_TOKEN and Files_READ_WRITE_TOKEN
-  const token = process.env.BLOB_READ_WRITE_TOKEN || process.env.Files_READ_WRITE_TOKEN;
+  // Support multiple token names
+  const token = process.env.BLOB_READ_WRITE_TOKEN 
+    || process.env.Files_READ_WRITE_TOKEN
+    || process.env.BLOB_TOKEN
+    || process.env.VERCEL_BLOB_TOKEN;
   if (!token) {
     throw new Error('BLOB_READ_WRITE_TOKEN is not set. Please add it to Vercel environment variables.');
   }
