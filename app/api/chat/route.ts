@@ -14,20 +14,30 @@ async function loadCourseMaterials(): Promise<string> {
     }
 
     const materialTexts: string[] = [];
+    const maxFilesToProcess = 10; // Limit to prevent timeout
 
-    for (const file of files) {
+    // Process files in parallel with limit
+    const filesToProcess = files.slice(0, maxFilesToProcess);
+    const extractionPromises = filesToProcess.map(async (file) => {
       try {
-        const response = await fetch(file.url);
+        const response = await fetch(file.url, { 
+          signal: AbortSignal.timeout(30000) // 30 second timeout per file
+        });
         const buffer = Buffer.from(await response.arrayBuffer());
         const extracted = await extractTextFromFile(file.name, buffer);
 
         if (extracted.text && !extracted.error) {
-          materialTexts.push(`\n\n=== ${file.name} ===\n${extracted.text}`);
+          return `\n\n=== ${file.name} ===\n${extracted.text}`;
         }
+        return null;
       } catch (error) {
         console.error(`Error processing file ${file.name}:`, error);
+        return null;
       }
-    }
+    });
+
+    const results = await Promise.all(extractionPromises);
+    materialTexts.push(...results.filter((r): r is string => r !== null));
 
     return materialTexts.join('\n');
   } catch (error) {
@@ -109,20 +119,34 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          console.log('Initializing Portkey client...');
           const portkey = getPortkeyClient();
+          console.log('Portkey client initialized, making API call...');
+          
           const response = await portkey.chat.completions.create({
-            model: AI_MODEL, // Configurable via AI_MODEL environment variable
+            model: AI_MODEL,
             messages: messages as any,
             max_tokens: 1500,
             temperature: 0.3,
             stream: true,
           });
 
+          console.log('Portkey API call started, streaming response...');
+          let hasContent = false;
+
           for await (const chunk of response) {
             const content = chunk.choices[0]?.delta?.content || '';
             if (content) {
+              hasContent = true;
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`));
             }
+          }
+
+          if (!hasContent) {
+            console.warn('No content received from Portkey API');
+            controller.enqueue(
+              new TextEncoder().encode(`data: ${JSON.stringify({ error: 'No response from AI. Please check your Portkey configuration and try again.' })}\n\n`)
+            );
           }
 
           controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
@@ -130,8 +154,13 @@ export async function POST(req: NextRequest) {
         } catch (error) {
           console.error('Portkey API error:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          const errorDetails = error instanceof Error ? error.stack : String(error);
+          console.error('Error details:', errorDetails);
+          
           controller.enqueue(
-            new TextEncoder().encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`)
+            new TextEncoder().encode(`data: ${JSON.stringify({ 
+              error: `AI Error: ${errorMessage}. Please check your Portkey API key and configuration.` 
+            })}\n\n`)
           );
           controller.close();
         }

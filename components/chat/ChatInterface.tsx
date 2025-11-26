@@ -51,7 +51,8 @@ export function ChatInterface() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const reader = response.body?.getReader();
@@ -85,6 +86,7 @@ export function ChatInterface() {
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.error) {
+                  setIsTyping(false);
                   throw new Error(parsed.error);
                 }
                 if (parsed.content) {
@@ -96,7 +98,11 @@ export function ChatInterface() {
                   });
                 }
               } catch (e) {
-                // Skip invalid JSON
+                if (e instanceof Error && e.message.includes('AI Error')) {
+                  setIsTyping(false);
+                  throw e;
+                }
+                // Skip invalid JSON for other cases
               }
             }
           }
