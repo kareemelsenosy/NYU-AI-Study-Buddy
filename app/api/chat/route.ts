@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { portkey, SYSTEM_PROMPT, AI_MODEL } from '@/lib/portkey';
+import { getPortkeyClient, SYSTEM_PROMPT, AI_MODEL } from '@/lib/portkey';
 import { listFiles } from '@/lib/storage';
 import { extractTextFromFile } from '@/lib/file-extractors';
 import { ChatRequest, Message } from '@/types';
@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          const portkey = getPortkeyClient();
           const response = await portkey.chat.completions.create({
             model: AI_MODEL, // Configurable via AI_MODEL environment variable
             messages: messages as any,

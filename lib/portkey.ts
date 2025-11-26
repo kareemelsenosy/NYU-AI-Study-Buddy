@@ -1,13 +1,37 @@
 import { Portkey } from 'portkey-ai';
 
-if (!process.env.PORTKEY_API_KEY) {
-  throw new Error('PORTKEY_API_KEY is not set in environment variables');
+// Lazy initialization to avoid errors during build time
+let portkeyInstance: Portkey | null = null;
+
+function getPortkey(): Portkey {
+  if (!portkeyInstance) {
+    const apiKey = process.env.PORTKEY_API_KEY;
+    if (!apiKey) {
+      throw new Error('PORTKEY_API_KEY is not set in environment variables');
+    }
+    portkeyInstance = new Portkey({
+      baseURL: process.env.PORTKEY_BASE_URL || "https://ai-gateway.apps.cloud.rt.nyu.edu/v1",
+      apiKey: apiKey,
+    });
+  }
+  return portkeyInstance;
 }
 
-// NYU-specific Portkey configuration
-export const portkey = new Portkey({
-  baseURL: process.env.PORTKEY_BASE_URL || "https://ai-gateway.apps.cloud.rt.nyu.edu/v1",
-  apiKey: process.env.PORTKEY_API_KEY,
+// Export a function that returns portkey instance (lazy initialization)
+export function getPortkeyClient(): Portkey {
+  return getPortkey();
+}
+
+// For backward compatibility, export portkey as a proxy
+export const portkey = new Proxy({} as Portkey, {
+  get(_target, prop) {
+    const instance = getPortkey();
+    const value = instance[prop as keyof Portkey];
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
 });
 
 // Model configuration - can be overridden via environment variable
