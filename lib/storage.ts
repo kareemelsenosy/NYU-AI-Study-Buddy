@@ -39,16 +39,6 @@ export async function uploadFile(file: File): Promise<FileMetadata> {
   }
 }
 
-  return {
-    id: blob.pathname,
-    name: file.name,
-    type: file.type,
-    size: file.size,
-    uploadedAt: new Date(), // Use current date since uploadedAt not available in PutBlobResult
-    url: blob.url,
-  };
-}
-
 export async function uploadFiles(files: File[]): Promise<FileMetadata[]> {
   const uploadPromises = files.map(file => uploadFile(file));
   return Promise.all(uploadPromises);
