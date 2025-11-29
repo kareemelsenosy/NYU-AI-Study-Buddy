@@ -15,7 +15,7 @@ export default function Home() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [hasFiles, setHasFiles] = useState(false);
 
-  // Check if user has files (to show chat directly)
+  // Check if user has files (but don't auto-show chat on reload)
   useEffect(() => {
     const checkFiles = async () => {
       try {
@@ -24,10 +24,7 @@ export default function Home() {
           const data = await response.json();
           if (data.files && data.files.length > 0) {
             setHasFiles(true);
-            // If user has files, show chat instead of welcome
-            if (showWelcome && !showFileManager && !showHelp) {
-              setShowWelcome(false);
-            }
+            // Don't auto-show chat - keep welcome page on reload
           }
         }
       } catch (error) {
@@ -35,6 +32,7 @@ export default function Home() {
       }
     };
     checkFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Listen for go-to-chat event
