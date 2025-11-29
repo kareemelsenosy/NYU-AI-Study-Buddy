@@ -1,5 +1,5 @@
 ===========================================
-VERCEL ENVIRONMENT VARIABLES - COPY & PASTE
+VERCEL ENVIRONMENT VARIABLES - NYU GATEWAY
 ===========================================
 
 Go to: Vercel Dashboard → Your Project → Settings → Environment Variables
@@ -13,21 +13,25 @@ Name: PORTKEY_API_KEY
 Value: 3QNI3x+PPoiQlnL5Jh348nMmUtz8
 Environments: ✅ Production ✅ Preview ✅ Development
 
+NOTE: This is your Virtual Key for NYU gateway
+
 -------------------------------------------
 VARIABLE 2: AI_MODEL
 -------------------------------------------
 Name: AI_MODEL
-Value: gpt-4o
+Value: @gpt-4o/gpt-4o
 Environments: ✅ Production ✅ Preview ✅ Development
 
+NOTE: Must match EXACTLY (with @ prefix)
+
 -------------------------------------------
-VARIABLE 3: PORTKEY_BASE_URL (OPTIONAL)
+VARIABLE 3: PORTKEY_BASE_URL
 -------------------------------------------
 Name: PORTKEY_BASE_URL
-Value: https://api.portkey.ai/v1
+Value: https://ai-gateway.apps.cloud.rt.nyu.edu/v1
 Environments: ✅ Production ✅ Preview ✅ Development
 
-NOTE: You can also leave this empty - it will use Portkey cloud automatically
+NOTE: NYU gateway URL (matching Python example)
 
 -------------------------------------------
 VARIABLE 4: Files_READ_WRITE_TOKEN
@@ -48,8 +52,8 @@ QUICK COPY LIST (for easy reference)
 ===========================================
 
 PORTKEY_API_KEY=3QNI3x+PPoiQlnL5Jh348nMmUtz8
-AI_MODEL=gpt-4o
-PORTKEY_BASE_URL=https://api.portkey.ai/v1
+AI_MODEL=@gpt-4o/gpt-4o
+PORTKEY_BASE_URL=https://ai-gateway.apps.cloud.rt.nyu.edu/v1
 Files_READ_WRITE_TOKEN=vercel_blob_rw_SQrULv5f505YfLOW_osTffHgOi4prYyTIEoFKOooYxxYrFu
 NEXT_PUBLIC_APP_URL=https://nyu-ai-study-buddy-eugo02n15-kareem-elsenosys-projects.vercel.app
 
@@ -72,8 +76,8 @@ IMPORTANT NOTES
    - PORTKEY_API_KEY = value ❌
 
 4. No quotes around values:
-   - AI_MODEL=gpt-4o ✅
-   - AI_MODEL="gpt-4o" ❌
+   - AI_MODEL=@gpt-4o/gpt-4o ✅
+   - AI_MODEL="@gpt-4o/gpt-4o" ❌
 
 5. After setting variables:
    - Go to Deployments → Latest → "..." → Redeploy
@@ -81,5 +85,9 @@ IMPORTANT NOTES
    - Click Redeploy
    - Wait 2-3 minutes
 
-===========================================
+6. NYU Gateway Access:
+   - If you get "fetch failed" errors, the gateway might require VPN
+   - Contact NYU IT to whitelist Vercel IPs if needed
+   - The code will automatically try direct fetch if SDK fails
 
+===========================================

@@ -8,9 +8,9 @@ export const runtime = 'nodejs';
 // Use this to verify your API key and model are correct
 export async function GET(req: NextRequest) {
   const apiKey = process.env.PORTKEY_API_KEY;
-  // Use Portkey cloud by default (publicly accessible)
-  const baseURL = process.env.PORTKEY_BASE_URL || "https://api.portkey.ai/v1";
-  const model = process.env.AI_MODEL || 'gpt-4o'; // Portkey cloud uses simpler model names
+  // Use NYU gateway (matching Python example)
+  const baseURL = process.env.PORTKEY_BASE_URL || "https://ai-gateway.apps.cloud.rt.nyu.edu/v1";
+  const model = process.env.AI_MODEL || '@gpt-4o/gpt-4o'; // NYU gateway format
   
   // Show what we're using
   const config = {
@@ -23,15 +23,15 @@ export async function GET(req: NextRequest) {
     },
     baseURL: {
       value: baseURL,
-      expected: 'https://api.portkey.ai/v1 (Portkey cloud - publicly accessible)',
-      matches: baseURL === 'https://api.portkey.ai/v1' || !baseURL,
-      note: 'Using Portkey cloud by default (no NYU gateway needed)',
+      expected: 'https://ai-gateway.apps.cloud.rt.nyu.edu/v1 (NYU gateway)',
+      matches: baseURL === 'https://ai-gateway.apps.cloud.rt.nyu.edu/v1',
+      note: 'Using NYU gateway (matching Python example)',
     },
     model: {
       value: model,
-      expected: 'gpt-4o (or @gpt-4o/gpt-4o for custom gateways)',
-      matches: model === 'gpt-4o' || model === '@gpt-4o/gpt-4o',
-      note: 'For Portkey cloud, use: gpt-4o. For custom gateways, use: @gpt-4o/gpt-4o',
+      expected: '@gpt-4o/gpt-4o (NYU gateway format)',
+      matches: model === '@gpt-4o/gpt-4o',
+      note: 'NYU gateway uses: @gpt-4o/gpt-4o format',
     },
   };
   
@@ -52,9 +52,9 @@ export async function GET(req: NextRequest) {
   }
   
   if (!config.model.matches) {
-    issues.push('⚠️ AI_MODEL format may be incorrect');
-    recommendations.push('For Portkey cloud, use: gpt-4o');
-    recommendations.push('For custom gateways, use: @gpt-4o/gpt-4o');
+    issues.push('⚠️ AI_MODEL does not match expected value');
+    recommendations.push('Model should be EXACTLY: @gpt-4o/gpt-4o');
+    recommendations.push('This matches your Python example');
     recommendations.push('Check Portkey Dashboard → Models → Copy the exact model identifier');
   }
   
@@ -110,11 +110,11 @@ export async function GET(req: NextRequest) {
       step1: 'Go to Portkey Dashboard (https://app.portkey.ai)',
       step2: 'Copy your Virtual Key API key (from API Keys section)',
       step3: 'Go to Models section and find gpt-4o',
-      step4: 'For Portkey cloud, use model: gpt-4o (simple format)',
+      step4: 'Copy the EXACT model identifier: @gpt-4o/gpt-4o',
       step5: 'In Vercel: Settings → Environment Variables',
-      step6: 'Set PORTKEY_API_KEY = (your Portkey API key)',
-      step7: 'Set AI_MODEL = gpt-4o (for Portkey cloud)',
-      step8: 'Leave PORTKEY_BASE_URL empty (uses Portkey cloud by default)',
+      step6: 'Set PORTKEY_API_KEY = 3QNI3x+PPoiQlnL5Jh348nMmUtz8 (your Virtual Key)',
+      step7: 'Set AI_MODEL = @gpt-4o/gpt-4o (exact format)',
+      step8: 'Set PORTKEY_BASE_URL = https://ai-gateway.apps.cloud.rt.nyu.edu/v1',
       step9: 'Redeploy after setting variables',
     },
   }, {
