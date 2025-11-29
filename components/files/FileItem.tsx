@@ -13,13 +13,6 @@ interface FileItemProps {
 
 export function FileItem({ file, onDelete }: FileItemProps) {
   const fileType = getFileType(file.name);
-  const fileTypeColors: Record<string, string> = {
-    pdf: 'text-red-500',
-    pptx: 'text-orange-500',
-    docx: 'text-blue-500',
-    xlsx: 'text-green-500',
-    txt: 'text-gray-500',
-  };
 
   return (
     <Card className="p-5 hover:shadow-lg transition-all border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-800">
