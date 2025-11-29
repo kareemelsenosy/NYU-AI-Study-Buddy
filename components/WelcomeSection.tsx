@@ -16,9 +16,11 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-purple-600 shadow-lg mb-4">
           <Sparkles className="h-10 w-10 text-white" />
         </div>
-        <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white drop-shadow-lg leading-normal pb-2">
-          Welcome to NYU AI Study Buddy
-        </h1>
+        <div className="bg-purple-700 dark:bg-purple-800 rounded-2xl px-8 py-6 shadow-xl">
+          <h1 className="text-4xl md:text-5xl font-bold text-white leading-normal pb-2">
+            Welcome to NYU AI Study Buddy
+          </h1>
+        </div>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
           Your intelligent academic assistant powered by AI. Get instant answers, explanations, and study support for all your NYU courses.
         </p>
