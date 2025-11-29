@@ -69,6 +69,12 @@ export default function Home() {
     setShowWelcome(false);
   };
 
+  const handleGoToHome = () => {
+    setShowFileManager(false);
+    setShowHelp(false);
+    setShowWelcome(true);
+  };
+
   const handleCloseModal = () => {
     setShowHelp(false);
     setShowFileManager(false);
@@ -84,6 +90,7 @@ export default function Home() {
         onFileManagerClick={handleGoToUpload}
         onHelpClick={() => setShowHelp(true)}
         onChatClick={handleGoToChat}
+        onHomeClick={handleGoToHome}
       />
       
       <main className="flex-1 overflow-hidden relative">

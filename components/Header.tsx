@@ -10,9 +10,10 @@ interface HeaderProps {
   onFileManagerClick?: () => void;
   onHelpClick?: () => void;
   onChatClick?: () => void;
+  onHomeClick?: () => void;
 }
 
-export function Header({ onFileManagerClick, onHelpClick, onChatClick }: HeaderProps) {
+export function Header({ onFileManagerClick, onHelpClick, onChatClick, onHomeClick }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -24,13 +25,13 @@ export function Header({ onFileManagerClick, onHelpClick, onChatClick }: HeaderP
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 dark:bg-gray-900/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-gray-900/80 shadow-sm">
       <div className="container flex h-20 items-center justify-between px-6">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={onChatClick}>
-            <div className="h-12 w-16 flex items-center justify-center overflow-hidden">
+          <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onClick={onHomeClick}>
+            <div className="h-12 w-12 flex items-center justify-center overflow-hidden">
               <Image 
                 src="/nyu-logo.svg" 
                 alt="NYU Logo" 
-                width={60} 
-                height={40} 
+                width={48} 
+                height={48} 
                 className="object-contain"
                 priority
               />
