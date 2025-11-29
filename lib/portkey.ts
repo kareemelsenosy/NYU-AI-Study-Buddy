@@ -136,7 +136,7 @@ export async function callPortkeyDirectly(
 // Always use getPortkeyClient() instead
 
 // Model configuration - can be overridden via environment variable
-export const AI_MODEL = process.env.AI_MODEL || '@gpt-4o/gpt-4o';
+export const AI_MODEL = process.env.AI_MODEL || '@vertexai/gemini-2.5-pro';
 
 export const SYSTEM_PROMPT = `You are an AI Study Buddy for NYU Abu Dhabi's CPE (Computer Engineering) course taught by Professor Mohamed Eid.
 
