@@ -26,7 +26,7 @@ export function Header({ onFileManagerClick, onHelpClick, onChatClick, onHomeCli
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onClick={onHomeClick}>
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-purple-500 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold text-purple-700 dark:text-purple-500 leading-normal pb-0.5">
                 NYU AI Study Buddy
               </h1>
               <p className="text-xs text-muted-foreground font-medium">

@@ -13,10 +13,10 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
     <div className="w-full max-w-4xl mx-auto px-4 py-8 space-y-8">
       {/* Hero Section */}
       <div className="text-center space-y-4 animate-in fade-in">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-400 shadow-lg mb-4">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-purple-600 shadow-lg mb-4">
           <Sparkles className="h-10 w-10 text-white" />
         </div>
-        <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 via-purple-500 to-purple-600 bg-clip-text text-transparent">
+        <h1 className="text-4xl md:text-5xl font-bold text-white drop-shadow-lg">
           Welcome to NYU AI Study Buddy
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -27,13 +27,13 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
       {/* How It Works */}
       <Card className="p-8 bg-gradient-to-br from-purple-50/50 to-blue-50/50 dark:from-purple-950/20 dark:to-blue-950/20 border-purple-200 dark:border-purple-800">
         <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-          <Target className="h-6 w-6 text-purple-600" />
+          <Target className="h-6 w-6 text-purple-700" />
           How It Works
         </h2>
         <div className="grid md:grid-cols-3 gap-6">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-500 text-white flex items-center justify-center font-bold">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold">
                 1
               </div>
               <h3 className="font-semibold text-lg">Upload Materials</h3>
@@ -44,7 +44,7 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
           </div>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-500 text-white flex items-center justify-center font-bold">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold">
                 2
               </div>
               <h3 className="font-semibold text-lg">Ask Questions</h3>
@@ -55,7 +55,7 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
           </div>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-500 text-white flex items-center justify-center font-bold">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold">
                 3
               </div>
               <h3 className="font-semibold text-lg">Get Answers</h3>
@@ -71,7 +71,7 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="p-6 hover:shadow-lg transition-shadow border-purple-200 dark:border-purple-800">
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center">
+            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center">
               <FileText className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -85,7 +85,7 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
 
         <Card className="p-6 hover:shadow-lg transition-shadow border-purple-200 dark:border-purple-800">
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center">
+            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center">
               <Zap className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -99,7 +99,7 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
 
         <Card className="p-6 hover:shadow-lg transition-shadow border-purple-200 dark:border-purple-800">
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center">
+            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center">
               <MessageSquare className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -113,7 +113,7 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
 
         <Card className="p-6 hover:shadow-lg transition-shadow border-purple-200 dark:border-purple-800">
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center">
+            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center">
               <BookOpen className="h-6 w-6 text-white" />
             </div>
             <div>

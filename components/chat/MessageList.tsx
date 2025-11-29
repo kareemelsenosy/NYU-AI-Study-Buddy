@@ -57,7 +57,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
           <div className="text-center py-8">
             <div className="max-w-3xl mx-auto space-y-6">
               <div className="space-y-2">
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">
+                <h3 className="text-2xl font-bold text-purple-700 dark:text-purple-500">
                   Ready to Get Started?
                 </h3>
                 <p className="text-muted-foreground">
