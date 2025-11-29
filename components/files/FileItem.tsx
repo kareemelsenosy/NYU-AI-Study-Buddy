@@ -17,7 +17,7 @@ export function FileItem({ file, onDelete }: FileItemProps) {
   return (
     <Card className="p-5 hover:shadow-lg transition-all border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-800">
       <div className="flex items-start gap-4">
-        <div className={`flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-[#57068C] to-[#8B2FC9] flex items-center justify-center shadow-md ${fileTypeColors[fileType] || 'text-white'}`}>
+        <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-[#57068C] to-[#8B2FC9] flex items-center justify-center shadow-md">
           <File className="h-6 w-6 text-white" />
         </div>
         <div className="flex-1 min-w-0">
