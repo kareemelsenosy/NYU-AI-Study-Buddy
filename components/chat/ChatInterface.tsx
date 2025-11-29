@@ -98,13 +98,19 @@ export function ChatInterface() {
                     updated[updated.length - 1] = { ...assistantMessage };
                     return updated;
                   });
-                  // Trigger scroll after content update
+                  // Trigger scroll after content update - multiple attempts
                   setTimeout(() => {
-                    const messageList = document.querySelector('[data-message-list]');
+                    const messageList = document.querySelector('[data-message-list]') as HTMLElement;
                     if (messageList) {
                       messageList.scrollTop = messageList.scrollHeight;
                     }
-                  }, 50);
+                  }, 10);
+                  setTimeout(() => {
+                    const messageList = document.querySelector('[data-message-list]') as HTMLElement;
+                    if (messageList) {
+                      messageList.scrollTop = messageList.scrollHeight;
+                    }
+                  }, 100);
                 }
               } catch (e) {
                 if (e instanceof Error && e.message.includes('AI Error')) {
