@@ -232,17 +232,26 @@ export async function POST(req: NextRequest) {
               message: sdkError?.message,
               status: sdkError?.status,
               cause: sdkError?.cause?.code || sdkError?.cause?.message,
+              stack: sdkError?.stack?.substring(0, 500),
             });
             
-            // Try direct fetch for any SDK error (not just 404)
-            // This bypasses the SDK initialization issues
-            if (sdkError?.message?.includes('fetch failed') || 
-                sdkError?.message?.includes('Cannot connect') ||
-                sdkError?.message?.includes('instantiate') ||
-                sdkError?.cause?.code === 'UND_ERR_CONNECT' ||
-                sdkError?.status === 404 || 
-                sdkError?.message?.includes('not found')) {
-              console.log(`[CHAT:${requestId}] 🔄 SDK failed, trying direct fetch fallback...`);
+            // Check if it's a network/connectivity error
+            const isNetworkError = 
+              sdkError?.message?.includes('fetch failed') || 
+              sdkError?.message?.includes('Cannot connect') ||
+              sdkError?.message?.includes('instantiate') ||
+              sdkError?.message?.includes('ECONNREFUSED') ||
+              sdkError?.message?.includes('ENOTFOUND') ||
+              sdkError?.message?.includes('timeout') ||
+              sdkError?.cause?.code === 'UND_ERR_CONNECT' ||
+              sdkError?.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+              sdkError?.status === 404 || 
+              sdkError?.message?.includes('not found');
+            
+            if (isNetworkError) {
+              console.log(`[CHAT:${requestId}] 🔄 Network error detected, trying direct fetch fallback...`);
+              console.log(`[CHAT:${requestId}] Error type: ${sdkError?.cause?.code || 'unknown'}`);
+              console.log(`[CHAT:${requestId}] This might indicate NYU gateway is not accessible from Vercel`);
               
               const apiKey = process.env.PORTKEY_API_KEY;
               // Use NYU gateway (matching Python example)
@@ -250,38 +259,51 @@ export async function POST(req: NextRequest) {
               const url = `${baseURL}/chat/completions`;
               
               console.log(`[CHAT:${requestId}] 🔗 Direct fetch URL: ${url}`);
+              console.log(`[CHAT:${requestId}] 🔑 API Key: ${apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING'}`);
+              console.log(`[CHAT:${requestId}] 🌍 Environment: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
+              console.log(`[CHAT:${requestId}] 📍 Region: ${process.env.VERCEL_REGION || 'unknown'}`);
+              
               const fetchStart = Date.now();
               
-              const fetchResponse = await fetch(url, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                  model: AI_MODEL,
-                  messages: messages,
-                  max_tokens: 1500,
-                  temperature: 0.3,
-                  stream: true,
-                }),
-              });
+              // Add timeout and better error handling for Vercel
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
               
-              const fetchDuration = Date.now() - fetchStart;
+              try {
+                const fetchResponse = await fetch(url, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: AI_MODEL,
+                    messages: messages,
+                    max_tokens: 1500,
+                    temperature: 0.3,
+                    stream: true,
+                  }),
+                  signal: controller.signal,
+                });
+                
+                clearTimeout(timeoutId);
               
-              if (!fetchResponse.ok) {
-                const errorText = await fetchResponse.text();
-                console.error(`[CHAT:${requestId}] ❌ Direct fetch failed: ${fetchResponse.status} (${fetchDuration}ms)`);
-                throw new Error(`Direct fetch failed (${fetchResponse.status}): ${errorText}`);
-              }
-              
-              if (!fetchResponse.body) {
-                console.error(`[CHAT:${requestId}] ❌ No response body from direct fetch`);
-                throw new Error('No response body from direct fetch');
-              }
-              
-              console.log(`[CHAT:${requestId}] ✅ Direct fetch successful (${fetchDuration}ms)`);
-              console.log(`[CHAT:${requestId}] 🌊 Converting to stream...`);
+                const fetchDuration = Date.now() - fetchStart;
+                
+                if (!fetchResponse.ok) {
+                  const errorText = await fetchResponse.text();
+                  console.error(`[CHAT:${requestId}] ❌ Direct fetch failed: ${fetchResponse.status} (${fetchDuration}ms)`);
+                  console.error(`[CHAT:${requestId}] Error response: ${errorText.substring(0, 500)}`);
+                  throw new Error(`Direct fetch failed (${fetchResponse.status}): ${errorText.substring(0, 200)}`);
+                }
+                
+                if (!fetchResponse.body) {
+                  console.error(`[CHAT:${requestId}] ❌ No response body from direct fetch`);
+                  throw new Error('No response body from direct fetch');
+                }
+                
+                console.log(`[CHAT:${requestId}] ✅ Direct fetch successful (${fetchDuration}ms)`);
+                console.log(`[CHAT:${requestId}] 🌊 Converting to stream...`);
               
               // Convert fetch response to async iterator compatible with Portkey SDK format
               const reader = fetchResponse.body.getReader();
@@ -321,8 +343,46 @@ export async function POST(req: NextRequest) {
                 }
               };
               
-              console.log(`[CHAT:${requestId}] ✅ Stream converter ready`);
+                console.log(`[CHAT:${requestId}] ✅ Stream converter ready`);
+              } catch (fetchError: any) {
+                clearTimeout(timeoutId);
+                const fetchDuration = Date.now() - fetchStart;
+                
+                console.error(`[CHAT:${requestId}] ❌ Direct fetch error after ${fetchDuration}ms:`, fetchError?.message || 'Unknown');
+                console.error(`[CHAT:${requestId}] Fetch error details:`, {
+                  name: fetchError?.name,
+                  message: fetchError?.message,
+                  cause: fetchError?.cause?.code || fetchError?.cause?.message,
+                  stack: fetchError?.stack?.substring(0, 500),
+                });
+                
+                // Check if it's a network connectivity issue
+                if (fetchError?.name === 'AbortError' || fetchError?.message?.includes('timeout')) {
+                  throw new Error(
+                    `Connection timeout to NYU gateway. This usually means:\n` +
+                    `1. NYU gateway requires VPN/network access\n` +
+                    `2. Vercel IPs are not whitelisted\n` +
+                    `3. Gateway is temporarily unavailable\n\n` +
+                    `Solution: Contact NYU IT to whitelist Vercel IPs or use Portkey Cloud instead.`
+                  );
+                }
+                
+                if (fetchError?.message?.includes('fetch failed') || 
+                    fetchError?.cause?.code === 'UND_ERR_CONNECT' ||
+                    fetchError?.cause?.code === 'ENOTFOUND') {
+                  throw new Error(
+                    `Cannot connect to NYU gateway from Vercel. This usually means:\n` +
+                    `1. NYU gateway is not accessible from Vercel's network\n` +
+                    `2. Gateway requires VPN or specific IP whitelisting\n` +
+                    `3. DNS resolution failed\n\n` +
+                    `Solution: Use Portkey Cloud (https://api.portkey.ai/v1) or contact NYU IT.`
+                  );
+                }
+                
+                throw fetchError;
+              }
             } else {
+              // Not a network error, throw original SDK error
               throw sdkError;
             }
           }
