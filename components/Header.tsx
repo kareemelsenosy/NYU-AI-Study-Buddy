@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { FolderOpen, Moon, Sun, HelpCircle } from 'lucide-react';
+import { FolderOpen, Moon, Sun, HelpCircle, MessageSquare, Upload } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
@@ -9,9 +9,10 @@ import Image from 'next/image';
 interface HeaderProps {
   onFileManagerClick?: () => void;
   onHelpClick?: () => void;
+  onChatClick?: () => void;
 }
 
-export function Header({ onFileManagerClick, onHelpClick }: HeaderProps) {
+export function Header({ onFileManagerClick, onHelpClick, onChatClick }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -23,12 +24,12 @@ export function Header({ onFileManagerClick, onHelpClick }: HeaderProps) {
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 dark:bg-gray-900/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-gray-900/80 shadow-sm">
       <div className="container flex h-20 items-center justify-between px-6">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-[#57068C] to-[#8B2FC9] flex items-center justify-center shadow-lg overflow-hidden">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={onChatClick}>
+            <div className="h-12 w-16 flex items-center justify-center overflow-hidden">
               <Image 
                 src="/nyu-logo.svg" 
                 alt="NYU Logo" 
-                width={40} 
+                width={60} 
                 height={40} 
                 className="object-contain"
                 priority
@@ -44,26 +45,36 @@ export function Header({ onFileManagerClick, onHelpClick }: HeaderProps) {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
-            onClick={onHelpClick}
-            className="hidden sm:flex items-center gap-2 text-muted-foreground hover:text-foreground"
-            aria-label="Help & Instructions"
+            onClick={onChatClick}
+            className="hidden sm:flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-purple-50 dark:hover:bg-purple-950/20"
+            aria-label="Go to Chat"
           >
-            <HelpCircle className="h-4 w-4" />
-            <span className="hidden md:inline">How It Works</span>
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden md:inline">Chat</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={onFileManagerClick}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
-            aria-label="File Manager"
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-purple-50 dark:hover:bg-purple-950/20"
+            aria-label="Upload Materials"
           >
-            <FolderOpen className="h-4 w-4" />
-            <span className="hidden md:inline">Materials</span>
+            <Upload className="h-4 w-4" />
+            <span className="hidden md:inline">Upload</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onHelpClick}
+            className="hidden sm:flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-purple-50 dark:hover:bg-purple-950/20"
+            aria-label="Help & Instructions"
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span className="hidden md:inline">How It Works</span>
           </Button>
           <Button
             variant="ghost"

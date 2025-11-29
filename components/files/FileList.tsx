@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { FileMetadata } from '@/types';
 import { FileItem } from './FileItem';
 import { FileUpload } from './FileUpload';
-import { Loader2, FolderOpen } from 'lucide-react';
+import { Loader2, FolderOpen, MessageSquare, ArrowRight } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
 import { formatFileSize } from '@/lib/utils';
 
@@ -111,6 +111,25 @@ export function FileList({ onFilesChange }: FileListProps) {
         loadFiles();
         onFilesChange?.();
       }} />
+
+      {/* Quick Action: Go to Chat */}
+      {files.length > 0 && (
+        <div className="flex justify-end pt-2">
+          <Button
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                const event = new CustomEvent('go-to-chat');
+                window.dispatchEvent(event);
+              }
+            }}
+            className="bg-gradient-to-r from-[#57068C] to-[#8B2FC9] hover:from-[#6A0BA8] hover:to-[#9D3FD9] text-white"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Start Chatting
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12">

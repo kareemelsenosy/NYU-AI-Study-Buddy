@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Upload, MessageSquare, Sparkles, FileText, Zap, Target } from 'lucide-react';
+import { BookOpen, Upload, MessageSquare, Sparkles, FileText, Zap, Target, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -127,14 +127,29 @@ export function WelcomeSection({ onGetStarted }: WelcomeSectionProps) {
       </div>
 
       {/* CTA */}
-      <div className="text-center pt-4">
+      <div className="text-center pt-4 space-y-3">
         <Button
           onClick={onGetStarted}
           size="lg"
-          className="bg-gradient-to-r from-[#57068C] to-[#8B2FC9] hover:from-[#6A0BA8] hover:to-[#9D3FD9] text-white shadow-lg px-8 py-6 text-lg"
+          className="bg-gradient-to-r from-[#57068C] to-[#8B2FC9] hover:from-[#6A0BA8] hover:to-[#9D3FD9] text-white shadow-lg px-8 py-6 text-lg mr-3"
         >
           <Upload className="h-5 w-5 mr-2" />
-          Get Started - Upload Your Materials
+          Upload Materials
+        </Button>
+        <Button
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              const event = new CustomEvent('go-to-chat');
+              window.dispatchEvent(event);
+            }
+          }}
+          size="lg"
+          variant="outline"
+          className="border-2 border-[#57068C] text-[#57068C] hover:bg-purple-50 dark:hover:bg-purple-950/20 px-8 py-6 text-lg"
+        >
+          <MessageSquare className="h-5 w-5 mr-2" />
+          Start Chatting
+          <ArrowRight className="h-5 w-5 ml-2" />
         </Button>
       </div>
     </div>
