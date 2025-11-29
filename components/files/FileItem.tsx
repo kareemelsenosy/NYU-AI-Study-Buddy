@@ -32,7 +32,7 @@ export function FileItem({ file, onDelete }: FileItemProps) {
           <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
             <span>{formatFileSize(file.size)}</span>
             <span>•</span>
-            <span>{formatDate(file.uploadedAt as any)}</span>
+            <span>{formatDate(file.uploadedAt)}</span>
             <span>•</span>
             <span className="uppercase">{fileType}</span>
           </div>
