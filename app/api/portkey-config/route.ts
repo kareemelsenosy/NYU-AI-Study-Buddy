@@ -8,9 +8,9 @@ export const runtime = 'nodejs';
 // Use this to verify your API key and model are correct
 export async function GET(req: NextRequest) {
   const apiKey = process.env.PORTKEY_API_KEY;
-  // Use NYU gateway (matching Python example)
+  // Use NYU gateway (matching TypeScript example)
   const baseURL = process.env.PORTKEY_BASE_URL || "https://ai-gateway.apps.cloud.rt.nyu.edu/v1";
-  const model = process.env.AI_MODEL || '@gpt-4o/gpt-4o'; // NYU gateway format
+  const model = process.env.AI_MODEL || '@vertexai/gemini-2.5-pro'; // Gemini model
   
   // Show what we're using
   const config = {
@@ -29,9 +29,9 @@ export async function GET(req: NextRequest) {
     },
     model: {
       value: model,
-      expected: '@gpt-4o/gpt-4o (NYU gateway format)',
-      matches: model === '@gpt-4o/gpt-4o',
-      note: 'NYU gateway uses: @gpt-4o/gpt-4o format',
+      expected: '@vertexai/gemini-2.5-pro (Gemini model)',
+      matches: model === '@vertexai/gemini-2.5-pro',
+      note: 'Using Gemini model: @vertexai/gemini-2.5-pro',
     },
   };
   
@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
   
   if (!config.model.matches) {
     issues.push('⚠️ AI_MODEL does not match expected value');
-    recommendations.push('Model should be EXACTLY: @gpt-4o/gpt-4o');
-    recommendations.push('This matches your Python example');
+    recommendations.push('Model should be EXACTLY: @vertexai/gemini-2.5-pro');
+    recommendations.push('This matches your TypeScript example');
     recommendations.push('Check Portkey Dashboard → Models → Copy the exact model identifier');
   }
   
@@ -109,11 +109,11 @@ export async function GET(req: NextRequest) {
     instructions: {
       step1: 'Go to Portkey Dashboard (https://app.portkey.ai)',
       step2: 'Copy your Virtual Key API key (from API Keys section)',
-      step3: 'Go to Models section and find gpt-4o',
-      step4: 'Copy the EXACT model identifier: @gpt-4o/gpt-4o',
+      step3: 'Go to Models section and find gemini-2.5-pro',
+      step4: 'Copy the EXACT model identifier: @vertexai/gemini-2.5-pro',
       step5: 'In Vercel: Settings → Environment Variables',
       step6: 'Set PORTKEY_API_KEY = 3QNI3x+PPoiQlnL5Jh348nMmUtz8 (your Virtual Key)',
-      step7: 'Set AI_MODEL = @gpt-4o/gpt-4o (exact format)',
+      step7: 'Set AI_MODEL = @vertexai/gemini-2.5-pro (exact format)',
       step8: 'Set PORTKEY_BASE_URL = https://ai-gateway.apps.cloud.rt.nyu.edu/v1',
       step9: 'Redeploy after setting variables',
     },

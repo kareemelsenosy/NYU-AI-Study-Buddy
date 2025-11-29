@@ -14,11 +14,11 @@ export async function GET() {
 
     const portkey = await getPortkeyClient();
     
-    // Test with same configuration as Python example
+    // Test with same configuration as TypeScript example
     const response = await portkey.chat.completions.create({
       model: AI_MODEL,
       messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'system', content: 'You are a helpful assistant' },
         { role: 'user', content: 'What is Portkey' }
       ],
       max_tokens: 512,

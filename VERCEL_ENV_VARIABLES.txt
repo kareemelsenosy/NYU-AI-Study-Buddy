@@ -19,10 +19,10 @@ NOTE: This is your Virtual Key for NYU gateway
 VARIABLE 2: AI_MODEL
 -------------------------------------------
 Name: AI_MODEL
-Value: @gpt-4o/gpt-4o
+Value: @vertexai/gemini-2.5-pro
 Environments: ✅ Production ✅ Preview ✅ Development
 
-NOTE: Must match EXACTLY (with @ prefix)
+NOTE: Must match EXACTLY (Gemini model)
 
 -------------------------------------------
 VARIABLE 3: PORTKEY_BASE_URL
@@ -31,7 +31,7 @@ Name: PORTKEY_BASE_URL
 Value: https://ai-gateway.apps.cloud.rt.nyu.edu/v1
 Environments: ✅ Production ✅ Preview ✅ Development
 
-NOTE: NYU gateway URL (matching Python example)
+NOTE: NYU gateway URL (matching TypeScript example)
 
 -------------------------------------------
 VARIABLE 4: Files_READ_WRITE_TOKEN
@@ -52,7 +52,7 @@ QUICK COPY LIST (for easy reference)
 ===========================================
 
 PORTKEY_API_KEY=3QNI3x+PPoiQlnL5Jh348nMmUtz8
-AI_MODEL=@gpt-4o/gpt-4o
+AI_MODEL=@vertexai/gemini-2.5-pro
 PORTKEY_BASE_URL=https://ai-gateway.apps.cloud.rt.nyu.edu/v1
 Files_READ_WRITE_TOKEN=vercel_blob_rw_SQrULv5f505YfLOW_osTffHgOi4prYyTIEoFKOooYxxYrFu
 NEXT_PUBLIC_APP_URL=https://nyu-ai-study-buddy-eugo02n15-kareem-elsenosys-projects.vercel.app
@@ -76,8 +76,8 @@ IMPORTANT NOTES
    - PORTKEY_API_KEY = value ❌
 
 4. No quotes around values:
-   - AI_MODEL=@gpt-4o/gpt-4o ✅
-   - AI_MODEL="@gpt-4o/gpt-4o" ❌
+   - AI_MODEL=@vertexai/gemini-2.5-pro ✅
+   - AI_MODEL="@vertexai/gemini-2.5-pro" ❌
 
 5. After setting variables:
    - Go to Deployments → Latest → "..." → Redeploy
