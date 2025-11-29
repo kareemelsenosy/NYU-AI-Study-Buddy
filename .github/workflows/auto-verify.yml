@@ -1,0 +1,59 @@
+name: Auto Verify on Push
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  auto-verify:
+    runs-on: ubuntu-latest
+    name: Auto Verify Commit
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for better commit analysis
+        
+    - name: Display commit info
+      run: |
+        echo "📝 Latest Commit Information:"
+        echo "================================"
+        git log -1 --pretty=format:"Commit: %H%nAuthor: %an <%ae>%nDate: %ad%nMessage: %s%n" --date=format:'%Y-%m-%d %H:%M:%S'
+        echo "================================"
+        
+    - name: Verify commit exists on GitHub
+      run: |
+        COMMIT_HASH=$(git rev-parse HEAD)
+        echo "✅ Commit hash: $COMMIT_HASH"
+        echo "🔗 View on GitHub: https://github.com/${{ github.repository }}/commit/$COMMIT_HASH"
+        
+    - name: Check files changed
+      run: |
+        echo "📁 Files changed in this commit:"
+        git diff --name-status HEAD~1 HEAD | head -20
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build verification
+      run: npm run build
+      env:
+        PORTKEY_API_KEY: ${{ secrets.PORTKEY_API_KEY || 'test-key' }}
+        PORTKEY_BASE_URL: ${{ secrets.PORTKEY_BASE_URL || 'https://ai-gateway.apps.cloud.rt.nyu.edu/v1' }}
+        AI_MODEL: ${{ secrets.AI_MODEL || '@vertexai/gemini-2.5-pro' }}
+        Files_READ_WRITE_TOKEN: ${{ secrets.Files_READ_WRITE_TOKEN || 'test-token' }}
+        NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || 'http://localhost:3000' }}
+        
+    - name: Success notification
+      run: |
+        echo "✅ Commit verified successfully!"
+        echo "📊 Build completed without errors"
+        echo "🔗 View commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+
