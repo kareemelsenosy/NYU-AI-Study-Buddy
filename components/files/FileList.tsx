@@ -72,6 +72,7 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
 
   useEffect(() => {
     loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]); // Reload when courseId changes
 
   const handleDeleteRequest = (fileId: string, fileUrl?: string) => {

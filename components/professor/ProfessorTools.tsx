@@ -54,6 +54,7 @@ export function ProfessorTools() {
 
   useEffect(() => {
     loadAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
   const loadAnalytics = () => {
