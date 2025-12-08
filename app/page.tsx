@@ -448,28 +448,14 @@ export default function Home() {
                   />
                 </div>
                 {/* File List for Selected Course */}
-                {selectedCourseId && (
-                  <div className="border-t pt-6">
-                    <h3 className="text-xl font-semibold mb-4">Upload Materials for Selected Course</h3>
-                    <FileList
-                      courseId={selectedCourseId}
-                      onFilesChange={() => {
-                        setHasFiles(true);
-                      }}
-                    />
-                  </div>
-                )}
-                {!selectedCourseId && (
-                  <Card className="p-8 text-center border-2 border-dashed border-gray-300 dark:border-gray-700">
-                    <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-muted-foreground mb-2">
-                      Select a course above to upload materials
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Or create a new course if you haven&apos;t created one yet
-                    </p>
-                  </Card>
-                )}
+                <div className="border-t pt-6">
+                  <FileList
+                    courseId={selectedCourseId || undefined}
+                    onFilesChange={() => {
+                      setHasFiles(true);
+                    }}
+                  />
+                </div>
               </div>
             </Card>
           </div>

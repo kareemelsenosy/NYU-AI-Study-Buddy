@@ -10,10 +10,11 @@ import { toast } from '@/components/ui/toast';
 
 interface FileUploadProps {
   onUploadComplete?: () => void;
-  courseId?: string;
+  courseId: string; // Required - must select a course before uploading
+  courseName?: string; // Optional - course name to display
 }
 
-export function FileUpload({ onUploadComplete, courseId }: FileUploadProps) {
+export function FileUpload({ onUploadComplete, courseId, courseName }: FileUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
@@ -55,19 +56,24 @@ export function FileUpload({ onUploadComplete, courseId }: FileUploadProps) {
       return;
     }
 
-    console.log('[FileUpload] Starting upload of', selectedFiles.length, 'file(s)');
-    if (courseId) {
-      console.log('[FileUpload] Course ID:', courseId);
+    if (!courseId) {
+      toast({
+        title: 'Course Required',
+        description: 'Please select a course before uploading files',
+        variant: 'destructive',
+      });
+      return;
     }
+
+    console.log('[FileUpload] Starting upload of', selectedFiles.length, 'file(s)');
+    console.log('[FileUpload] Course ID:', courseId);
     setUploading(true);
     const formData = new FormData();
     selectedFiles.forEach((file, index) => {
       console.log(`[FileUpload] Adding file ${index + 1}:`, file.name, formatFileSize(file.size));
       formData.append('files', file);
     });
-    if (courseId) {
-      formData.append('courseId', courseId);
-    }
+    formData.append('courseId', courseId);
 
     try {
       console.log('[FileUpload] Sending request to /api/upload');
@@ -100,12 +106,10 @@ export function FileUpload({ onUploadComplete, courseId }: FileUploadProps) {
         }));
         
         // Associate files with course on client side
-        if (courseId) {
-          const { addFileToCourse } = await import('@/lib/course-management');
-          filesWithDates.forEach((file: any) => {
-            addFileToCourse(courseId, file.id, file.name);
-          });
-        }
+        const { addFileToCourse } = await import('@/lib/course-management');
+        filesWithDates.forEach((file: any) => {
+          addFileToCourse(courseId, file.id, file.name);
+        });
         
         toast({
           title: 'Success',
@@ -133,6 +137,12 @@ export function FileUpload({ onUploadComplete, courseId }: FileUploadProps) {
 
   return (
     <div className="space-y-4">
+      {courseName && (
+        <div className="flex items-center gap-2 px-2">
+          <span className="text-sm font-medium text-muted-foreground">Uploading to:</span>
+          <span className="text-sm font-semibold text-[#57068C] dark:text-purple-400">{courseName}</span>
+        </div>
+      )}
       <Card className="p-6 border-2 border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50/50 to-blue-50/50 dark:from-purple-950/20 dark:to-blue-950/20">
         <div
           {...getRootProps()}

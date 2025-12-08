@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { FileMetadata } from '@/types';
 import { FileItem } from './FileItem';
 import { FileUpload } from './FileUpload';
-import { Loader2, FolderOpen, MessageSquare, ArrowRight } from 'lucide-react';
+import { Loader2, FolderOpen, MessageSquare, ArrowRight, Upload } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
 import { formatFileSize } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { getUserRole } from '@/lib/course-management';
+import { getUserRole, getCourse } from '@/lib/course-management';
 
 interface FileListProps {
   onFilesChange?: () => void;
@@ -135,25 +136,41 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
 
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
 
+  const course = courseId ? getCourse(courseId) : null;
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold mb-2 text-[#57068C] dark:text-purple-400">
-          Course Materials
+          {course ? `${course.name} - Materials` : 'Course Materials'}
         </h2>
         <p className="text-muted-foreground text-lg">
-          Upload your course files (PDF, PPTX, DOCX, XLSX, TXT) from any NYU course. The AI will use these materials to provide accurate, course-specific answers.
+          {course 
+            ? `Upload and manage files for ${course.name}. The AI will use these materials to provide accurate, course-specific answers.`
+            : 'Upload your course files (PDF, PPTX, DOCX, XLSX, TXT) from any NYU course. The AI will use these materials to provide accurate, course-specific answers.'}
         </p>
       </div>
 
-      {userRole === 'professor' && (
+      {userRole === 'professor' && courseId && (
         <FileUpload 
           courseId={courseId}
+          courseName={getCourse(courseId)?.name}
           onUploadComplete={() => {
             loadFiles();
             onFilesChange?.();
           }} 
         />
+      )}
+      {userRole === 'professor' && !courseId && (
+        <Card className="p-8 text-center border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+          <p className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+            Select a Course to Upload Materials
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Please create or select a course above before uploading files
+          </p>
+        </Card>
       )}
 
       {/* Quick Action: Go to Chat */}
