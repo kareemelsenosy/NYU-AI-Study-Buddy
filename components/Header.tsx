@@ -6,8 +6,7 @@ import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { ModelSelector } from './ModelSelector';
 import { UserMenu } from './auth/UserMenu';
-import { User } from '@/types';
-import { getUserRole } from '@/lib/course-management';
+import { User, UserRole } from '@/types';
 
 interface HeaderProps {
   onFileManagerClick?: () => void;
@@ -17,6 +16,7 @@ interface HeaderProps {
   onSettingsClick?: () => void;
   onModelChange?: (modelId: string) => void;
   user?: User | null;
+  userRole?: UserRole | null;
   onSignInClick?: () => void;
   onProfileClick?: () => void;
   onSignOut?: () => void;
@@ -30,16 +30,16 @@ export function Header({
   onSettingsClick,
   onModelChange,
   user,
+  userRole,
   onSignInClick,
   onProfileClick,
   onSignOut,
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const role = getUserRole();
   // Only show role-specific buttons if user is signed in AND has a role selected
-  const isProfessor = user && role === 'professor';
-  const isStudent = user && role === 'student';
+  const isProfessor = user && userRole === 'professor';
+  const isStudent = user && userRole === 'student';
 
   useEffect(() => {
     setMounted(true);

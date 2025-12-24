@@ -3,17 +3,16 @@
 import { Upload, MessageSquare, Sparkles, FileText, Zap, Target, ArrowRight, GraduationCap, Brain, BookOpen, Users, BarChart3 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getUserRole } from '@/lib/course-management';
-import { getCurrentUser } from '@/lib/user-auth';
+import { User, UserRole } from '@/types';
 
 interface WelcomeSectionProps {
+  user?: User | null;
+  role?: UserRole | null;
   onGetStarted?: () => void;
   onViewAnalytics?: () => void;
 }
 
-export function WelcomeSection({ onGetStarted, onViewAnalytics }: WelcomeSectionProps) {
-  const user = getCurrentUser();
-  const role = getUserRole();
+export function WelcomeSection({ user, role, onGetStarted, onViewAnalytics }: WelcomeSectionProps) {
   // Only show role-specific content if user is signed in AND has a role selected
   // If no user is signed in, always show default welcome
   const isProfessor = user !== null && role === 'professor';

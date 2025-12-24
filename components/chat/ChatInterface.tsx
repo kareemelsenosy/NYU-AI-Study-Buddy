@@ -294,16 +294,25 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
         stack: error instanceof Error ? error.stack : undefined,
       });
       
+      // Show toast with error
       toast({
-        title: 'Error',
-        description: errorMessage,
+        title: 'Connection Error',
+        description: errorMessage.includes('NYU AI Gateway') 
+          ? 'Please connect to NYU VPN or campus network'
+          : errorMessage,
         variant: 'destructive',
       });
+
+      // Format error message for display
+      let displayError = errorMessage;
+      if (errorMessage.includes('NYU AI Gateway')) {
+        displayError = errorMessage.replace(/\n\n/g, '\n').replace(/\n/g, '\n\n');
+      }
 
       const errorMsg: MessageType = {
         id: generateId(),
         role: 'assistant',
-        content: `Sorry, I encountered an error: ${errorMessage}. Please try again.`,
+        content: displayError,
         timestamp: new Date(),
       };
       setMessages((prev) => {

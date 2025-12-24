@@ -4,7 +4,6 @@ import { Message as MessageType, User } from '@/types';
 import { Message } from './Message';
 import { TypingIndicator } from './TypingIndicator';
 import { useEffect, useRef } from 'react';
-import { getUserRole } from '@/lib/course-management';
 
 interface MessageListProps {
   messages: MessageType[];
@@ -14,9 +13,8 @@ interface MessageListProps {
 
 export function MessageList({ messages, isTyping, user }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const role = getUserRole();
   // Only show professor-specific content if user is signed in AND has professor role
-  const isProfessor = user && role === 'professor';
+  const isProfessor = user?.role === 'professor';
 
   useEffect(() => {
     // Scroll to bottom when messages change or typing indicator appears

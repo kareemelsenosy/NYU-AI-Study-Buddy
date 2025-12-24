@@ -296,6 +296,7 @@ export default function Home() {
         onSettingsClick={() => setShowSettingsModal(true)}
         onModelChange={handleModelChange}
         user={user}
+        userRole={userRole}
         onSignInClick={() => {
           // If no role selected, show role selection first
           const currentRole = getUserRole();
@@ -380,6 +381,8 @@ export default function Home() {
               </div>
               <div className="p-6 overflow-y-auto max-h-[calc(85vh-88px)]">
                 <HelpContent 
+                  user={user}
+                  role={userRole}
                   onGetStarted={() => {
                     handleCloseModal();
                     handleGetStarted();
@@ -504,6 +507,8 @@ export default function Home() {
           <div className="h-full overflow-auto">
             <div className="min-h-full flex items-center justify-center py-12">
               <WelcomeSection 
+                user={user}
+                role={userRole}
                 onGetStarted={() => {
                   // First show role selection if no role selected, then auth
                   const currentRole = getUserRole();

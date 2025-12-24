@@ -3,18 +3,17 @@
 import { Upload, MessageSquare, Brain, FileText, Zap, Shield, Lightbulb, CheckCircle2, BookOpen, Users, BarChart3, GraduationCap } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getUserRole } from '@/lib/course-management';
-import { getCurrentUser } from '@/lib/user-auth';
+import { User, UserRole } from '@/types';
 
 interface HelpContentProps {
+  user?: User | null;
+  role?: UserRole | null;
   onGetStarted?: () => void;
   onStartChat?: () => void;
   onViewAnalytics?: () => void;
 }
 
-export function HelpContent({ onGetStarted, onStartChat, onViewAnalytics }: HelpContentProps) {
-  const user = getCurrentUser();
-  const role = getUserRole();
+export function HelpContent({ user, role, onGetStarted, onStartChat, onViewAnalytics }: HelpContentProps) {
   // Only show role-specific content if user is signed in AND has a role selected
   const isProfessor = user && role === 'professor';
   const isStudent = user && role === 'student';

@@ -555,8 +555,12 @@ CRITICAL INSTRUCTIONS:
           let userMessage = error instanceof Error ? error.message : 'Unknown error';
           
           // Provide helpful error for network issues
-          if (userMessage.includes('fetch failed') || userMessage.includes('Cannot connect') || userMessage.includes('UND_ERR_CONNECT')) {
-            userMessage = 'Cannot connect to NYU AI Gateway. This usually means the app is deployed outside NYU\'s network. The NYU gateway is only accessible from within NYU\'s network (campus or VPN).';
+          if (userMessage.includes('fetch failed') || userMessage.includes('Cannot connect') || userMessage.includes('UND_ERR_CONNECT') || userMessage.includes('timeout')) {
+            userMessage = '⚠️ Cannot connect to NYU AI Gateway.\n\n' +
+              'The NYU AI Gateway is only accessible from within NYU\'s network. To use the chat:\n\n' +
+              '1. Connect to NYU VPN (if off-campus)\n' +
+              '2. Or use the app while on NYU campus network\n\n' +
+              'If you are already connected, please check your VPN connection and try again.';
           }
           
           controller.enqueue(
