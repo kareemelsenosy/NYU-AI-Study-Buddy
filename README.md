@@ -13,7 +13,7 @@ NYU AI Study Buddy is a comprehensive educational platform that leverages advanc
 - **Comprehensive Analytics** — Track engagement, questions, and student activity
 - **Multi-format Support** — PDF, PPTX, DOCX, XLSX, and TXT files
 - **Modern UI** — Professional design with dark/light mode and responsive layout
-- **Supabase Backend** — Real PostgreSQL database for users, courses, chat history, and analytics
+- **Supabase Backend** — PostgreSQL database + file storage for users, courses, files, and analytics
 
 ---
 
@@ -164,8 +164,7 @@ The platform supports 5 advanced AI models through the NYU Portkey Gateway:
 - Node.js 18+
 - npm
 - NYU Portkey API access (for the AI gateway)
-- Vercel Blob Storage account (for file storage)
-- Supabase project (for database — free tier works, see [DATABASE_SETUP_GUIDE.md](../DATABASE_SETUP_GUIDE.md))
+- Supabase project (free tier works) — for database + file storage, see [DATABASE_SETUP_GUIDE.md](../DATABASE_SETUP_GUIDE.md)
 
 ### Installation
 
@@ -193,10 +192,7 @@ The platform supports 5 advanced AI models through the NYU Portkey Gateway:
    PORTKEY_BASE_URL=https://ai-gateway.apps.cloud.rt.nyu.edu/v1
    AI_MODEL=@gpt-4o/gpt-4o
 
-   # File Storage (Vercel Blob)
-   FILES_READ_WRITE_TOKEN=your_vercel_blob_token
-
-   # Database (Supabase)
+   # Supabase — Database + File Storage
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
@@ -323,7 +319,6 @@ ai-study-buddy/
 | `PORTKEY_API_KEY` | Portkey API key for the NYU AI gateway | `pk-...` |
 | `PORTKEY_BASE_URL` | Portkey gateway URL | `https://ai-gateway.apps.cloud.rt.nyu.edu/v1` |
 | `AI_MODEL` | Default AI model | `@gpt-4o/gpt-4o` |
-| `FILES_READ_WRITE_TOKEN` | Vercel Blob storage token | `vercel_blob_rw_...` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xyz.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key | `eyJ...` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-only) | `eyJ...` |
@@ -362,7 +357,7 @@ npm run lint
 - **AI Integration**: Portkey AI Gateway (NYU)
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth — email/password + NYU Google OAuth
-- **Storage**: Vercel Blob Storage
+- **Storage**: Supabase Storage
 - **UI Components**: Custom components with Lucide icons
 - **State Management**: React Hooks + Supabase
 - **Charts**: Recharts for analytics visualization
@@ -394,7 +389,7 @@ npm run lint
 - Drag-and-drop file upload
 - View all uploaded files with metadata
 - Delete files with in-app confirmation
-- Files organized by course and stored in Vercel Blob
+- Files organized by course and stored in Supabase Storage
 - Files persist across sessions
 - Support for multiple file formats
 
@@ -474,8 +469,7 @@ MIT License — see LICENSE file for details
 
 - **NYU Abu Dhabi** for providing the AI gateway infrastructure
 - **Portkey AI** for gateway services and multi-model support
-- **Supabase** for the open-source database and auth platform
-- **Vercel** for blob storage and deployment platform
+- **Supabase** for the open-source database, auth, and storage platform
 - All the open-source libraries that make this project possible
 
 ---

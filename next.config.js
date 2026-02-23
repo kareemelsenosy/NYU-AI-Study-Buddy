@@ -5,9 +5,7 @@ const nextConfig = {
       bodySizeLimit: '50mb',
     },
   },
-  images: {
-    domains: ['vercel.blob.core.windows.net'],
-  },
+
 };
 
 module.exports = nextConfig;

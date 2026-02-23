@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Upload files
-    console.log(`[UPLOAD:${requestId}] 🚀 Starting file upload to Vercel Blob...${courseId ? ` (course: ${courseId})` : ''}`);
+    console.log(`[UPLOAD:${requestId}] 🚀 Starting file upload to Supabase Storage...${courseId ? ` (course: ${courseId})` : ''}`);
     const uploadStart = Date.now();
     const uploadedFiles = await uploadFiles(files);
     const uploadDuration = Date.now() - uploadStart;
