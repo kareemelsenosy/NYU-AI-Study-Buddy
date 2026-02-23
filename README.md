@@ -2,21 +2,22 @@
 
 An intelligent academic assistant platform for NYU Abu Dhabi, designed to enhance learning and teaching through AI-powered course material analysis, personalized chat assistance, and comprehensive analytics. The platform serves both students and professors with role-specific dashboards and features.
 
-## 🎯 Overview
+## Overview
 
 NYU AI Study Buddy is a comprehensive educational platform that leverages advanced AI models to provide instant, context-aware answers from course materials. The platform features separate dashboards for students and professors, enabling personalized learning experiences and detailed course analytics.
 
 **Key Highlights:**
-- 🤖 **5 Advanced AI Models** - Choose from GPT-4o, Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.5 Flash Lite, and Llama 3.1 405B
-- 👨‍🎓 **Student Dashboard** - Course selection, AI-powered chat, and personalized learning
-- 👨‍🏫 **Professor Dashboard** - Course management, analytics, and quiz generation
-- 📊 **Comprehensive Analytics** - Track engagement, questions, and student activity
-- 📁 **Multi-format Support** - PDF, PPTX, DOCX, XLSX, and TXT files
-- 🎨 **Modern UI** - Professional design with dark/light mode and responsive layout
+- **5 Advanced AI Models** — Choose from GPT-4o, Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.5 Flash Lite, and Llama 3.1 405B
+- **Student Dashboard** — Course selection, AI-powered chat, and personalized learning
+- **Professor Dashboard** — Course management, analytics, and quiz generation
+- **Comprehensive Analytics** — Track engagement, questions, and student activity
+- **Multi-format Support** — PDF, PPTX, DOCX, XLSX, and TXT files
+- **Modern UI** — Professional design with dark/light mode and responsive layout
+- **Supabase Backend** — Real PostgreSQL database for users, courses, chat history, and analytics
 
 ---
 
-## ✨ Features
+## Features
 
 ### Core Functionality
 - **Multi-format File Support**: Upload and analyze PDF, PPTX, DOCX, XLSX, and TXT files
@@ -27,10 +28,10 @@ NYU AI Study Buddy is a comprehensive educational platform that leverages advanc
 
 ### User Experience
 - **Role-based Access**: Separate interfaces for students and professors
-- **User Accounts**: Sign up, sign in, and personalize your learning experience
-- **Chat History**: Save, search, and manage multiple conversation sessions
+- **User Accounts**: Sign up with email/password or sign in with your NYU Google account
+- **Chat History**: Save, search, and manage multiple conversation sessions (persisted in Supabase)
 - **Model Selection**: Choose from 5 different AI models based on your needs
-- **Personalization**: The AI learns your learning style, strengths, weaknesses, and study topics
+- **Personalization**: The AI adapts to your learning style, strengths, weaknesses, and study topics
 - **Settings**: Comprehensive settings for appearance, chat preferences, and notifications
 
 ### Interface
@@ -42,7 +43,7 @@ NYU AI Study Buddy is a comprehensive educational platform that leverages advanc
 
 ---
 
-## 🎓 Student Dashboard
+## Student Dashboard
 
 The Student Dashboard provides a streamlined learning experience focused on accessing course materials and getting AI-powered assistance.
 
@@ -73,7 +74,7 @@ The Student Dashboard provides a streamlined learning experience focused on acce
 
 ---
 
-## 👨‍🏫 Professor Dashboard
+## Professor Dashboard
 
 The Professor Dashboard provides comprehensive tools for course management, analytics, and content generation.
 
@@ -124,7 +125,7 @@ AI-powered quiz generation from course materials:
 
 ---
 
-## 🤖 Available AI Models
+## Available AI Models
 
 The platform supports 5 advanced AI models through the NYU Portkey Gateway:
 
@@ -157,13 +158,14 @@ The platform supports 5 advanced AI models through the NYU Portkey Gateway:
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-- NYU Portkey API access (for AI gateway)
+- Node.js 18+
+- npm
+- NYU Portkey API access (for the AI gateway)
 - Vercel Blob Storage account (for file storage)
+- Supabase project (for database — free tier works, see [DATABASE_SETUP_GUIDE.md](../DATABASE_SETUP_GUIDE.md))
 
 ### Installation
 
@@ -178,34 +180,49 @@ The platform supports 5 advanced AI models through the NYU Portkey Gateway:
    npm install
    ```
 
-3. **Set up environment variables**
-   
-   Create a `.env.local` file in the root directory:
+3. **Set up the database**
+
+   Follow [DATABASE_SETUP_GUIDE.md](../DATABASE_SETUP_GUIDE.md) to create your free Supabase project and run the required SQL migrations.
+
+4. **Set up environment variables**
+
+   Create a `.env.local` file in the root of `ai-study-buddy/`:
    ```env
+   # AI Gateway (NYU Portkey)
    PORTKEY_API_KEY=your_portkey_api_key
    PORTKEY_BASE_URL=https://ai-gateway.apps.cloud.rt.nyu.edu/v1
    AI_MODEL=@gpt-4o/gpt-4o
-   Files_READ_WRITE_TOKEN=your_vercel_blob_token
+
+   # File Storage (Vercel Blob)
+   FILES_READ_WRITE_TOKEN=your_vercel_blob_token
+
+   # Database (Supabase)
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+   # App
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
 
-4. **Run the development server**
+5. **Run the development server**
    ```bash
    npm run dev
    ```
 
-5. **Open your browser**
-   
+6. **Open your browser**
+
    Navigate to [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ai-study-buddy/
 ├── app/
 │   ├── api/                    # API routes
+│   │   ├── auth/               # Google OAuth callbacks
 │   │   ├── chat/               # Chat endpoint with streaming
 │   │   ├── upload/             # File upload handler
 │   │   ├── files/              # File management (list, delete)
@@ -213,8 +230,8 @@ ai-study-buddy/
 │   │   ├── generate-title/     # AI-powered chat title generation
 │   │   ├── portkey-config/     # Portkey configuration
 │   │   ├── health/             # Health check endpoint
-│   │   ├── debug/               # Debug utilities
-│   │   └── test/                # Testing endpoints
+│   │   ├── debug/              # Debug utilities
+│   │   └── test/               # Testing endpoints
 │   ├── layout.tsx              # Root layout with theme provider
 │   ├── page.tsx                # Main application page
 │   └── globals.css             # Global styles and animations
@@ -233,10 +250,10 @@ ai-study-buddy/
 │   ├── files/                  # File management components
 │   │   ├── FileList.tsx        # File list with upload
 │   │   ├── FileItem.tsx        # Individual file card
-│   │   └── FileUpload.tsx     # Drag-and-drop upload
+│   │   └── FileUpload.tsx      # Drag-and-drop upload
 │   ├── professor/              # Professor-specific components
 │   │   ├── ProfessorAnalytics.tsx  # Analytics dashboard
-│   │   └── ProfessorTools.tsx    # Tools and utilities
+│   │   └── ProfessorTools.tsx      # Tools and utilities
 │   ├── ui/                     # Reusable UI components
 │   │   ├── button.tsx          # Button component
 │   │   ├── card.tsx            # Card component
@@ -249,7 +266,7 @@ ai-study-buddy/
 │   ├── HelpContent.tsx         # Help documentation
 │   ├── ModelSelector.tsx       # AI model selector
 │   ├── SettingsModal.tsx       # Settings panel
-│   ├── RoleSelectionModal.tsx # Role selection (Student/Professor)
+│   ├── RoleSelectionModal.tsx  # Role selection (Student/Professor)
 │   ├── CourseManager.tsx       # Course management (Professors)
 │   ├── CourseSelector.tsx      # Course selection (Students)
 │   └── ThemeProvider.tsx       # Theme context provider
@@ -260,15 +277,16 @@ ai-study-buddy/
 │   │   ├── docx-extractor.ts   # Word document parsing
 │   │   ├── xlsx-extractor.ts   # Excel parsing
 │   │   └── index.ts            # Unified extractor interface
+│   ├── supabase.ts             # Supabase client (browser + server)
 │   ├── portkey.ts              # Portkey AI client
 │   ├── storage.ts              # Vercel Blob storage operations
-│   ├── chat-history.ts          # Chat session management
-│   ├── chat-export.ts           # Chat export/print functions
-│   ├── user-auth.ts            # User authentication & memory
+│   ├── chat-history.ts         # Chat session management
+│   ├── chat-export.ts          # Chat export/print functions
+│   ├── user-auth.ts            # User authentication & memory (Supabase-backed)
 │   ├── course-management.ts    # Course CRUD operations
 │   ├── analytics.ts            # Analytics and tracking
 │   ├── models.ts               # AI model configuration
-│   ├── settings.ts              # Application settings
+│   ├── settings.ts             # Application settings
 │   └── utils.ts                # Utility functions
 └── types/
     └── index.ts                # TypeScript type definitions
@@ -276,34 +294,39 @@ ai-study-buddy/
 
 ---
 
-## 🎯 How It Works
+## How It Works
 
 ### For Students:
-1. **Select Course**: Choose a course created by your professor
-2. **Ask Questions**: Type questions about course materials in the chat
-3. **AI Analysis**: The system extracts text from all course files, analyzes your question, and selects relevant sections
-4. **Get Answers**: Receive comprehensive answers with citations from course materials
-5. **Personalized Learning**: The AI adapts to your learning style and tracks your progress
+1. **Sign In**: Use your NYU Google account or email/password
+2. **Select Course**: Choose a course created by your professor
+3. **Ask Questions**: Type questions about course materials in the chat
+4. **AI Analysis**: The system extracts text from all course files, analyzes your question, and selects relevant sections
+5. **Get Answers**: Receive comprehensive answers with citations from course materials
+6. **Personalized Learning**: The AI adapts to your learning style and tracks your progress
 
 ### For Professors:
-1. **Create Course**: Set up a new course with name and description
-2. **Upload Materials**: Add PDFs, PowerPoints, Word docs, etc. to the course
-3. **Track Engagement**: View analytics dashboard to see student questions and activity
-4. **Generate Quizzes**: Use AI to create quizzes from course materials
-5. **Monitor Performance**: Analyze engagement patterns, peak hours, and popular topics
+1. **Sign In**: Use your NYU Google account or email/password
+2. **Create Course**: Set up a new course with name and description
+3. **Upload Materials**: Add PDFs, PowerPoints, Word docs, etc. to the course
+4. **Track Engagement**: View analytics dashboard to see student questions and activity
+5. **Generate Quizzes**: Use AI to create quizzes from course materials
+6. **Monitor Performance**: Analyze engagement patterns, peak hours, and popular topics
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `PORTKEY_API_KEY` | Your Portkey API key for NYU gateway | `your_key_here` |
+| `PORTKEY_API_KEY` | Portkey API key for the NYU AI gateway | `pk-...` |
 | `PORTKEY_BASE_URL` | Portkey gateway URL | `https://ai-gateway.apps.cloud.rt.nyu.edu/v1` |
-| `AI_MODEL` | Default AI model to use | `@gpt-4o/gpt-4o` |
-| `Files_READ_WRITE_TOKEN` | Vercel Blob storage token | `vercel_blob_rw_...` |
+| `AI_MODEL` | Default AI model | `@gpt-4o/gpt-4o` |
+| `FILES_READ_WRITE_TOKEN` | Vercel Blob storage token | `vercel_blob_rw_...` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xyz.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key | `eyJ...` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-only) | `eyJ...` |
 | `NEXT_PUBLIC_APP_URL` | Your application URL | `http://localhost:3000` |
 
 ### File Limits
@@ -313,7 +336,7 @@ ai-study-buddy/
 
 ---
 
-## 🛠️ Development
+## Development
 
 ### Available Scripts
 
@@ -337,17 +360,21 @@ npm run lint
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **AI Integration**: Portkey AI Gateway (NYU)
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth — email/password + NYU Google OAuth
 - **Storage**: Vercel Blob Storage
 - **UI Components**: Custom components with Lucide icons
-- **State Management**: React Hooks + Local Storage
+- **State Management**: React Hooks + Supabase
 - **Charts**: Recharts for analytics visualization
 
 ---
 
-## 📝 Features in Detail
+## Features in Detail
 
-### User Accounts & Personalization
-- Create account with email and name
+### User Accounts & Authentication
+- Sign up with name, email, and password
+- Sign in with NYU Google account (restricted to `nyu.edu` domain)
+- User data (preferences, memory, chat history) persisted in Supabase
 - Set learning preferences (visual, auditory, reading, kinesthetic)
 - Define academic level and major
 - Track studied topics and strengths/weaknesses
@@ -356,6 +383,7 @@ npm run lint
 
 ### Chat History
 - Automatic session management (like ChatGPT)
+- Sessions and messages stored in Supabase
 - Search through past conversations
 - Export chats as text files
 - Print conversations
@@ -366,7 +394,7 @@ npm run lint
 - Drag-and-drop file upload
 - View all uploaded files with metadata
 - Delete files with in-app confirmation
-- Files organized by course
+- Files organized by course and stored in Vercel Blob
 - Files persist across sessions
 - Support for multiple file formats
 
@@ -395,7 +423,7 @@ npm run lint
 
 ---
 
-## 🎨 User Interface
+## User Interface
 
 ### Design Philosophy
 - **Professional**: High-end design with NYU purple branding
@@ -412,17 +440,18 @@ npm run lint
 
 ---
 
-## 🔒 Security & Privacy
+## Security & Privacy
 
-- **Local Storage**: User data stored locally in browser
+- **Supabase Auth**: Secure authentication with Row Level Security (RLS)
+- **NYU OAuth**: Google sign-in restricted to `nyu.edu` domain
 - **Secure API**: All API calls use HTTPS
-- **Environment Variables**: Sensitive keys stored in environment variables
-- **File Validation**: File type and size validation
+- **Environment Variables**: Sensitive keys stored server-side only (`SUPABASE_SERVICE_ROLE_KEY` is never exposed to the browser)
+- **File Validation**: File type and size validation on upload
 - **Error Handling**: Comprehensive error handling and user feedback
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -435,27 +464,28 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📄 License
+## License
 
-MIT License - see LICENSE file for details
+MIT License — see LICENSE file for details
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **NYU Abu Dhabi** for providing the AI gateway infrastructure
 - **Portkey AI** for gateway services and multi-model support
+- **Supabase** for the open-source database and auth platform
 - **Vercel** for blob storage and deployment platform
 - All the open-source libraries that make this project possible
 
 ---
 
-## 📞 Support
+## Support
 
 For issues, questions, or contributions, please open an issue on GitHub.
 
 ---
 
-**Built with ❤️ for NYU Abu Dhabi students and professors**
+**Built for NYU Abu Dhabi students and professors**
 
 *Empowering education through AI technology*
