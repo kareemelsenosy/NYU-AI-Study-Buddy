@@ -1,11 +1,10 @@
 import { Course, CourseFile, UserRole } from '@/types';
+import { supabase } from '@/lib/supabase';
 
+// ── Role helpers (role stays in localStorage — it's just a UI state) ──────────
 const STORAGE_KEY_ROLE = 'nyu-study-buddy-user-role';
-const STORAGE_KEY_COURSES = 'nyu-study-buddy-courses';
-const STORAGE_KEY_COURSE_FILES = 'nyu-study-buddy-course-files';
 const STORAGE_KEY_SELECTED_COURSE = 'nyu-study-buddy-selected-course';
 
-// Role Management
 export function getUserRole(): UserRole | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -30,159 +29,190 @@ export function setUserRole(role: UserRole | null): void {
   }
 }
 
-// Course Management
-export function getAllCourses(): Course[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY_COURSES);
-    if (!stored) return [];
-    const courses = JSON.parse(stored) as Course[];
-    return courses.map(course => ({
-      ...course,
-      createdAt: new Date(course.createdAt),
-      updatedAt: new Date(course.updatedAt),
-    }));
-  } catch (error) {
-    console.error('[CourseManagement] Error loading courses:', error);
-    return [];
-  }
-}
-
-export function getCourse(id: string): Course | null {
-  const courses = getAllCourses();
-  return courses.find(c => c.id === id) || null;
-}
-
-export function getCoursesByProfessor(professorId: string): Course[] {
-  const courses = getAllCourses();
-  return courses.filter(c => c.professorId === professorId);
-}
-
-export function createCourse(name: string, description: string, professorId: string, professorName: string): Course {
-  const course: Course = {
-    id: `course-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-    name,
-    description,
-    professorId,
-    professorName,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    fileIds: [],
+// ── Map DB row → Course object ────────────────────────────────────────────────
+function rowToCourse(row: Record<string, unknown>, fileIds: string[] = []): Course {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: (row.description as string) || '',
+    professorId: row.professor_id as string,
+    professorName: row.professor_name as string,
+    createdAt: new Date(row.created_at as string),
+    updatedAt: new Date(row.updated_at as string),
+    fileIds,
   };
-  
-  const courses = getAllCourses();
-  courses.push(course);
-  saveAllCourses(courses);
-  
-  return course;
 }
 
-export function updateCourse(id: string, updates: Partial<Pick<Course, 'name' | 'description'>>): void {
-  const courses = getAllCourses();
-  const index = courses.findIndex(c => c.id === id);
-  if (index >= 0) {
-    courses[index] = {
-      ...courses[index],
-      ...updates,
-      updatedAt: new Date(),
-    };
-    saveAllCourses(courses);
-  }
-}
+// ── Get All Courses ───────────────────────────────────────────────────────────
+export async function getAllCourses(): Promise<Course[]> {
+  const { data: courses, error } = await supabase
+    .from('courses')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-export function deleteCourse(id: string): void {
-  const courses = getAllCourses();
-  const filtered = courses.filter(c => c.id !== id);
-  saveAllCourses(filtered);
-  
-  // Also remove course files
-  const courseFiles = getAllCourseFiles();
-  const filteredFiles = courseFiles.filter(cf => cf.courseId !== id);
-  saveAllCourseFiles(filteredFiles);
-}
+  if (error || !courses) return [];
 
-function saveAllCourses(courses: Course[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(courses));
-    window.dispatchEvent(new Event('courses-change'));
-  } catch (error) {
-    console.error('[CourseManagement] Error saving courses:', error);
-  }
-}
+  // Fetch file IDs for all courses in one query
+  const courseIds = courses.map(c => c.id);
+  const { data: files } = await supabase
+    .from('course_files')
+    .select('course_id, file_id')
+    .in('course_id', courseIds);
 
-// Course File Management
-export function getAllCourseFiles(): CourseFile[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY_COURSE_FILES);
-    if (!stored) return [];
-    const files = JSON.parse(stored) as CourseFile[];
-    return files.map(file => ({
-      ...file,
-      uploadedAt: new Date(file.uploadedAt),
-    }));
-  } catch (error) {
-    console.error('[CourseManagement] Error loading course files:', error);
-    return [];
-  }
-}
-
-export function getCourseFiles(courseId: string): CourseFile[] {
-  const allFiles = getAllCourseFiles();
-  return allFiles.filter(f => f.courseId === courseId);
-}
-
-export function addFileToCourse(courseId: string, fileId: string, fileName: string): void {
-  const courseFiles = getAllCourseFiles();
-  // Check if already exists
-  if (courseFiles.some(cf => cf.courseId === courseId && cf.fileId === fileId)) {
-    return; // Already added
-  }
-  
-  courseFiles.push({
-    courseId,
-    fileId,
-    fileName,
-    uploadedAt: new Date(),
+  const fileMap: Record<string, string[]> = {};
+  (files || []).forEach(f => {
+    if (!fileMap[f.course_id]) fileMap[f.course_id] = [];
+    fileMap[f.course_id].push(f.file_id);
   });
-  
-  saveAllCourseFiles(courseFiles);
-  
-  // Update course fileIds
-  const courses = getAllCourses();
-  const course = courses.find(c => c.id === courseId);
-  if (course && !course.fileIds.includes(fileId)) {
-    course.fileIds.push(fileId);
-    saveAllCourses(courses);
-  }
+
+  return courses.map(c => rowToCourse(c, fileMap[c.id] || []));
 }
 
-export function removeFileFromCourse(courseId: string, fileId: string): void {
-  const courseFiles = getAllCourseFiles();
-  const filtered = courseFiles.filter(cf => !(cf.courseId === courseId && cf.fileId === fileId));
-  saveAllCourseFiles(filtered);
-  
-  // Update course fileIds
-  const courses = getAllCourses();
-  const course = courses.find(c => c.id === courseId);
-  if (course) {
-    course.fileIds = course.fileIds.filter(id => id !== fileId);
-    saveAllCourses(courses);
-  }
+// ── Get Single Course ─────────────────────────────────────────────────────────
+export async function getCourse(id: string): Promise<Course | null> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) return null;
+
+  const { data: files } = await supabase
+    .from('course_files')
+    .select('file_id')
+    .eq('course_id', id);
+
+  const fileIds = (files || []).map(f => f.file_id);
+  return rowToCourse(data, fileIds);
 }
 
-function saveAllCourseFiles(files: CourseFile[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY_COURSE_FILES, JSON.stringify(files));
-    window.dispatchEvent(new Event('course-files-change'));
-  } catch (error) {
-    console.error('[CourseManagement] Error saving course files:', error);
-  }
+// ── Get Courses By Professor ──────────────────────────────────────────────────
+export async function getCoursesByProfessor(professorId: string): Promise<Course[]> {
+  const { data: courses, error } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('professor_id', professorId)
+    .order('created_at', { ascending: false });
+
+  if (error || !courses) return [];
+
+  const courseIds = courses.map(c => c.id);
+  const { data: files } = await supabase
+    .from('course_files')
+    .select('course_id, file_id')
+    .in('course_id', courseIds);
+
+  const fileMap: Record<string, string[]> = {};
+  (files || []).forEach(f => {
+    if (!fileMap[f.course_id]) fileMap[f.course_id] = [];
+    fileMap[f.course_id].push(f.file_id);
+  });
+
+  return courses.map(c => rowToCourse(c, fileMap[c.id] || []));
 }
 
-// Selected Course Management
+// ── Create Course ─────────────────────────────────────────────────────────────
+export async function createCourse(
+  name: string,
+  description: string,
+  professorId: string,
+  professorName: string
+): Promise<Course> {
+  const id = `course-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+  const { data, error } = await supabase
+    .from('courses')
+    .insert({ id, name, description, professor_id: professorId, professor_name: professorName })
+    .select()
+    .single();
+
+  if (error || !data) throw new Error(error?.message || 'Failed to create course');
+  return rowToCourse(data, []);
+}
+
+// ── Update Course ─────────────────────────────────────────────────────────────
+export async function updateCourse(
+  id: string,
+  updates: Partial<Pick<Course, 'name' | 'description'>>
+): Promise<void> {
+  await supabase
+    .from('courses')
+    .update({
+      ...(updates.name !== undefined && { name: updates.name }),
+      ...(updates.description !== undefined && { description: updates.description }),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+}
+
+// ── Delete Course ─────────────────────────────────────────────────────────────
+export async function deleteCourse(id: string): Promise<void> {
+  // course_files rows are deleted automatically via ON DELETE CASCADE
+  await supabase.from('courses').delete().eq('id', id);
+}
+
+// ── Get Course Files ──────────────────────────────────────────────────────────
+export async function getAllCourseFiles(): Promise<CourseFile[]> {
+  const { data, error } = await supabase
+    .from('course_files')
+    .select('*')
+    .order('uploaded_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  return data.map(row => ({
+    courseId: row.course_id,
+    fileId: row.file_id,
+    fileName: row.file_name,
+    uploadedAt: new Date(row.uploaded_at),
+  }));
+}
+
+export async function getCourseFiles(courseId: string): Promise<CourseFile[]> {
+  const { data, error } = await supabase
+    .from('course_files')
+    .select('*')
+    .eq('course_id', courseId)
+    .order('uploaded_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  return data.map(row => ({
+    courseId: row.course_id,
+    fileId: row.file_id,
+    fileName: row.file_name,
+    uploadedAt: new Date(row.uploaded_at),
+  }));
+}
+
+// ── Add File To Course ────────────────────────────────────────────────────────
+export async function addFileToCourse(
+  courseId: string,
+  fileId: string,
+  fileName: string,
+  fileUrl: string = '',
+  fileSize: number = 0,
+  fileType: string = 'unknown'
+): Promise<void> {
+  await supabase
+    .from('course_files')
+    .upsert(
+      { course_id: courseId, file_id: fileId, file_name: fileName, file_url: fileUrl, file_size: fileSize, file_type: fileType },
+      { onConflict: 'course_id,file_id' }
+    );
+}
+
+// ── Remove File From Course ───────────────────────────────────────────────────
+export async function removeFileFromCourse(courseId: string, fileId: string): Promise<void> {
+  await supabase
+    .from('course_files')
+    .delete()
+    .eq('course_id', courseId)
+    .eq('file_id', fileId);
+}
+
+// ── Selected Course (stays in localStorage — it's just a UI state) ────────────
 export function getSelectedCourseId(): string | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -205,4 +235,3 @@ export function setSelectedCourseId(courseId: string | null): void {
     console.error('[CourseManagement] Error saving selected course:', error);
   }
 }
-

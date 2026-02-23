@@ -23,6 +23,7 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; url?: string; name: string } | null>(null);
+  const [course, setCourse] = useState<Awaited<ReturnType<typeof getCourse>> | null>(null);
 
   const loadFiles = async () => {
     try {
@@ -33,7 +34,7 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
       let url = '/api/files';
       if (courseId) {
         const { getCourseFiles } = await import('@/lib/course-management');
-        const courseFiles = getCourseFiles(courseId);
+        const courseFiles = await getCourseFiles(courseId);
         const fileIds = courseFiles.map(cf => cf.fileId);
         if (fileIds.length > 0) {
           url = `/api/files?fileIds=${fileIds.join(',')}`;
@@ -72,6 +73,11 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
 
   useEffect(() => {
     loadFiles();
+    if (courseId) {
+      getCourse(courseId).then(setCourse);
+    } else {
+      setCourse(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]); // Reload when courseId changes
 
@@ -137,8 +143,6 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
 
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
 
-  const course = courseId ? getCourse(courseId) : null;
-
   return (
     <div className="space-y-6">
       <div>
@@ -155,7 +159,7 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
       {userRole === 'professor' && courseId && (
         <FileUpload 
           courseId={courseId}
-          courseName={getCourse(courseId)?.name}
+          courseName={course?.name}
           onUploadComplete={() => {
             loadFiles();
             onFilesChange?.();

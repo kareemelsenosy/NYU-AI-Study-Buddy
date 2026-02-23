@@ -1,19 +1,21 @@
 import { User, UserPreferences, UserMemory, UserRole } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 // Simple password hashing (for demo - in production use bcrypt or similar)
 function hashPassword(password: string): string {
-  // Simple hash for demo purposes
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
     const char = password.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash;
   }
   return hash.toString(36);
 }
 
-const USER_STORAGE_KEY = 'nyu-study-buddy-user';
-const USERS_DB_KEY = 'nyu-study-buddy-users-db';
+// Generate unique ID
+function generateUserId(): string {
+  return 'user_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
 
 // Default preferences for new users
 const defaultPreferences: UserPreferences = {
@@ -35,37 +37,20 @@ const defaultMemory: UserMemory = {
   lastUpdated: new Date(),
 };
 
-// Generate unique ID
-function generateUserId(): string {
-  return 'user_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-}
+// ── Session helpers (keep current user in localStorage for fast access) ──────
+const SESSION_KEY = 'nyu-study-buddy-user';
 
-// Get all users from "database"
-function getAllUsers(): Record<string, User> {
-  if (typeof window === 'undefined') return {};
-  const data = localStorage.getItem(USERS_DB_KEY);
-  if (!data) return {};
-  try {
-    return JSON.parse(data);
-  } catch {
-    return {};
-  }
-}
-
-// Save all users to "database"
-function saveAllUsers(users: Record<string, User>): void {
+function saveSession(user: User): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
 }
 
-// Get current logged in user
 export function getCurrentUser(): User | null {
   if (typeof window === 'undefined') return null;
-  const data = localStorage.getItem(USER_STORAGE_KEY);
+  const data = localStorage.getItem(SESSION_KEY);
   if (!data) return null;
   try {
     const user = JSON.parse(data);
-    // Convert date strings back to Date objects
     user.createdAt = new Date(user.createdAt);
     user.memory.lastUpdated = new Date(user.memory.lastUpdated);
     return user;
@@ -74,227 +59,289 @@ export function getCurrentUser(): User | null {
   }
 }
 
-// Save current user session
-function saveCurrentUser(user: User): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+// ── Map DB row → User object ──────────────────────────────────────────────────
+function rowToUser(row: Record<string, unknown>): User {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    email: row.email as string,
+    password: row.password_hash as string,
+    role: row.role as UserRole,
+    createdAt: new Date(row.created_at as string),
+    preferences: {
+      learningStyle: (row.learning_style as UserPreferences['learningStyle']) || 'reading',
+      academicLevel: (row.academic_level as UserPreferences['academicLevel']) || 'sophomore',
+      major: (row.major as string) || '',
+      preferredLanguage: (row.preferred_language as string) || 'English',
+      responseStyle: (row.response_style as UserPreferences['responseStyle']) || 'detailed',
+      tone: (row.tone as UserPreferences['tone']) || 'encouraging',
+    },
+    memory: {
+      topics: (row.memory_topics as string[]) || [],
+      strengths: (row.memory_strengths as string[]) || [],
+      weaknesses: (row.memory_weaknesses as string[]) || [],
+      recentQuestions: (row.recent_questions as string[]) || [],
+      notes: (row.memory_notes as string) || '',
+      lastUpdated: new Date(row.memory_last_updated as string),
+    },
+  };
 }
 
-// Sign up a new user
-export function signUp(name: string, email: string, password: string, role: UserRole): { success: boolean; user?: User; error?: string } {
-  const users = getAllUsers();
-  
-  // Check if email already exists
-  const existingUser = Object.values(users).find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (existingUser) {
-    return { success: false, error: 'An account with this email already exists. Please sign in.' };
+// ── NYU Google OAuth Sign-In ──────────────────────────────────────────────────
+export async function signInWithGoogle(role: UserRole): Promise<void> {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('pending-role', role);
   }
-  
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+      queryParams: {
+        hd: 'nyu.edu',
+        prompt: 'select_account',
+      },
+    },
+  });
+  if (error) throw new Error(error.message);
+}
+
+// ── Sign Up ───────────────────────────────────────────────────────────────────
+export async function signUp(
+  name: string,
+  email: string,
+  password: string,
+  role: UserRole
+): Promise<{ success: boolean; user?: User; error?: string }> {
   if (!password || password.length < 6) {
     return { success: false, error: 'Password must be at least 6 characters long.' };
   }
-  
   if (!role) {
     return { success: false, error: 'Please select your role (Student or Professor).' };
   }
-  
-  const newUser: User = {
-    id: generateUserId(),
-    name: name.trim(),
-    email: email.toLowerCase().trim(),
-    password: hashPassword(password),
-    role: role,
-    createdAt: new Date(),
-    preferences: { ...defaultPreferences },
-    memory: { ...defaultMemory, lastUpdated: new Date() },
-  };
-  
-  users[newUser.id] = newUser;
-  saveAllUsers(users);
-  saveCurrentUser(newUser);
-  
-  // Save role to course management
-  if (typeof window !== 'undefined') {
-    import('@/lib/course-management').then(({ setUserRole }) => {
-      setUserRole(role);
-    });
-  }
-  
-  return { success: true, user: newUser };
-}
 
-// Sign in existing user
-export function signIn(email: string, password: string): { success: boolean; user?: User; error?: string } {
-  const users = getAllUsers();
-  
-  const user = Object.values(users).find(u => u.email.toLowerCase() === email.toLowerCase().trim());
-  if (!user) {
-    return { success: false, error: 'No account found with this email. Please sign up first.' };
+  const id = generateUserId();
+  const { data, error } = await supabase
+    .from('users')
+    .insert({
+      id,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password_hash: hashPassword(password),
+      role,
+      learning_style: defaultPreferences.learningStyle,
+      academic_level: defaultPreferences.academicLevel,
+      major: defaultPreferences.major,
+      preferred_language: defaultPreferences.preferredLanguage,
+      response_style: defaultPreferences.responseStyle,
+      tone: defaultPreferences.tone,
+      memory_topics: defaultMemory.topics,
+      memory_strengths: defaultMemory.strengths,
+      memory_weaknesses: defaultMemory.weaknesses,
+      recent_questions: defaultMemory.recentQuestions,
+      memory_notes: defaultMemory.notes,
+      memory_last_updated: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      return { success: false, error: 'An account with this email already exists. Please sign in.' };
+    }
+    return { success: false, error: error.message };
   }
-  
-  // Verify password
-  if (!user.password || hashPassword(password) !== user.password) {
-    return { success: false, error: 'Incorrect password. Please try again.' };
+
+  const user = rowToUser(data);
+  saveSession(user);
+
+  // Sync role to course-management
+  if (typeof window !== 'undefined') {
+    import('@/lib/course-management').then(({ setUserRole }) => setUserRole(role));
   }
-  
-  // Convert dates
-  user.createdAt = new Date(user.createdAt);
-  user.memory.lastUpdated = new Date(user.memory.lastUpdated);
-  
-  // Load role from user account if available
-  if (user.role && typeof window !== 'undefined') {
-    import('@/lib/course-management').then(({ setUserRole }) => {
-      setUserRole(user.role!);
-    });
-  }
-  
-  saveCurrentUser(user);
+
   return { success: true, user };
 }
 
-// Sign out
+// ── Sign In ───────────────────────────────────────────────────────────────────
+export async function signIn(
+  email: string,
+  password: string
+): Promise<{ success: boolean; user?: User; error?: string }> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email.toLowerCase().trim())
+    .single();
+
+  if (error || !data) {
+    return { success: false, error: 'No account found with this email. Please sign up first.' };
+  }
+
+  if (hashPassword(password) !== data.password_hash) {
+    return { success: false, error: 'Incorrect password. Please try again.' };
+  }
+
+  const user = rowToUser(data);
+  saveSession(user);
+
+  if (user.role && typeof window !== 'undefined') {
+    import('@/lib/course-management').then(({ setUserRole }) => setUserRole(user.role!));
+  }
+
+  return { success: true, user };
+}
+
+// ── Sign Out ──────────────────────────────────────────────────────────────────
 export function signOut(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(USER_STORAGE_KEY);
+  localStorage.removeItem(SESSION_KEY);
 }
 
-// Update user preferences
-export function updatePreferences(preferences: Partial<UserPreferences>): User | null {
+// ── Update Preferences ────────────────────────────────────────────────────────
+export async function updatePreferences(preferences: Partial<UserPreferences>): Promise<User | null> {
   const user = getCurrentUser();
   if (!user) return null;
-  
-  user.preferences = { ...user.preferences, ...preferences };
-  
-  // Save to both current session and database
-  saveCurrentUser(user);
-  const users = getAllUsers();
-  users[user.id] = user;
-  saveAllUsers(users);
-  
-  return user;
+
+  const updates: Record<string, unknown> = {};
+  if (preferences.learningStyle !== undefined) updates.learning_style = preferences.learningStyle;
+  if (preferences.academicLevel !== undefined) updates.academic_level = preferences.academicLevel;
+  if (preferences.major !== undefined) updates.major = preferences.major;
+  if (preferences.preferredLanguage !== undefined) updates.preferred_language = preferences.preferredLanguage;
+  if (preferences.responseStyle !== undefined) updates.response_style = preferences.responseStyle;
+  if (preferences.tone !== undefined) updates.tone = preferences.tone;
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('users')
+    .update(updates)
+    .eq('id', user.id)
+    .select()
+    .single();
+
+  if (error || !data) return null;
+
+  const updated = rowToUser(data);
+  saveSession(updated);
+  return updated;
 }
 
-// Update user memory
-export function updateMemory(memory: Partial<UserMemory>): User | null {
+// ── Update Memory ─────────────────────────────────────────────────────────────
+export async function updateMemory(memory: Partial<UserMemory>): Promise<User | null> {
   const user = getCurrentUser();
   if (!user) return null;
-  
-  user.memory = { 
-    ...user.memory, 
-    ...memory,
-    lastUpdated: new Date(),
-  };
-  
-  // Save to both current session and database
-  saveCurrentUser(user);
-  const users = getAllUsers();
-  users[user.id] = user;
-  saveAllUsers(users);
-  
-  return user;
+
+  const updates: Record<string, unknown> = { memory_last_updated: new Date().toISOString() };
+  if (memory.topics !== undefined) updates.memory_topics = memory.topics;
+  if (memory.strengths !== undefined) updates.memory_strengths = memory.strengths;
+  if (memory.weaknesses !== undefined) updates.memory_weaknesses = memory.weaknesses;
+  if (memory.recentQuestions !== undefined) updates.recent_questions = memory.recentQuestions;
+  if (memory.notes !== undefined) updates.memory_notes = memory.notes;
+
+  const { data, error } = await supabase
+    .from('users')
+    .update(updates)
+    .eq('id', user.id)
+    .select()
+    .single();
+
+  if (error || !data) return null;
+
+  const updated = rowToUser(data);
+  saveSession(updated);
+  return updated;
 }
 
-// Add a topic to user's studied topics
-export function addStudiedTopic(topic: string): void {
+// ── Add Studied Topic ─────────────────────────────────────────────────────────
+export async function addStudiedTopic(topic: string): Promise<void> {
   const user = getCurrentUser();
   if (!user) return;
-  
-  if (!user.memory.topics.includes(topic)) {
-    user.memory.topics = [...user.memory.topics, topic].slice(-50); // Keep last 50
-    user.memory.lastUpdated = new Date();
-    saveCurrentUser(user);
-    const users = getAllUsers();
-    users[user.id] = user;
-    saveAllUsers(users);
-  }
+  if (user.memory.topics.includes(topic)) return;
+
+  const newTopics = [...user.memory.topics, topic].slice(-50);
+  await updateMemory({ topics: newTopics });
 }
 
-// Add a question to recent questions
-export function addRecentQuestion(question: string): void {
+// ── Add Recent Question ───────────────────────────────────────────────────────
+export async function addRecentQuestion(question: string): Promise<void> {
   const user = getCurrentUser();
   if (!user) return;
-  
-  user.memory.recentQuestions = [question, ...user.memory.recentQuestions].slice(0, 20); // Keep last 20
-  user.memory.lastUpdated = new Date();
-  saveCurrentUser(user);
-  const users = getAllUsers();
-  users[user.id] = user;
-  saveAllUsers(users);
+
+  const newQuestions = [question, ...user.memory.recentQuestions].slice(0, 20);
+  await updateMemory({ recentQuestions: newQuestions });
 }
 
-// Learn from a conversation - extract key topics and update memory
-export function learnFromConversation(userMessage: string, aiResponse: string): void {
+// ── Learn From Conversation ───────────────────────────────────────────────────
+export async function learnFromConversation(userMessage: string, aiResponse: string): Promise<void> {
   const user = getCurrentUser();
   if (!user) return;
-  
-  // Extract potential topics from the conversation
+
   const combinedText = (userMessage + ' ' + aiResponse).toLowerCase();
-  
-  // Common academic topic patterns
   const topicPatterns = [
     /(?:about|regarding|explain|understand|learn|study|chapter|lecture|topic)\s+([a-z\s]{3,30})/gi,
     /(?:what is|how does|how do|how to)\s+([a-z\s]{3,30})/gi,
   ];
-  
+
   const extractedTopics: string[] = [];
   topicPatterns.forEach(pattern => {
     let match;
     while ((match = pattern.exec(combinedText)) !== null) {
-      const topic = match[1].trim();
-      if (topic.length > 3 && topic.split(' ').length <= 5) {
-        extractedTopics.push(topic);
-      }
+      const t = match[1].trim();
+      if (t.length > 3 && t.split(' ').length <= 5) extractedTopics.push(t);
     }
   });
-  
-  // Add unique topics
+
   let updated = false;
+  const topics = [...user.memory.topics];
   extractedTopics.forEach(topic => {
-    const normalizedTopic = topic.charAt(0).toUpperCase() + topic.slice(1);
-    if (!user.memory.topics.includes(normalizedTopic) && 
-        !user.memory.topics.some(t => t.toLowerCase() === normalizedTopic.toLowerCase())) {
-      user.memory.topics = [...user.memory.topics, normalizedTopic].slice(-50);
+    const normalized = topic.charAt(0).toUpperCase() + topic.slice(1);
+    if (!topics.some(t => t.toLowerCase() === normalized.toLowerCase())) {
+      topics.push(normalized);
       updated = true;
     }
   });
-  
+
   if (updated) {
-    user.memory.lastUpdated = new Date();
-    saveCurrentUser(user);
-    const users = getAllUsers();
-    users[user.id] = user;
-    saveAllUsers(users);
+    await updateMemory({ topics: topics.slice(-50) });
   }
 }
 
-// Update user name
-export function updateName(name: string): User | null {
+// ── Update Name ───────────────────────────────────────────────────────────────
+export async function updateName(name: string): Promise<User | null> {
   const user = getCurrentUser();
   if (!user) return null;
-  
-  user.name = name.trim();
-  saveCurrentUser(user);
-  const users = getAllUsers();
-  users[user.id] = user;
-  saveAllUsers(users);
-  
-  return user;
+
+  const { data, error } = await supabase
+    .from('users')
+    .update({ name: name.trim(), updated_at: new Date().toISOString() })
+    .eq('id', user.id)
+    .select()
+    .single();
+
+  if (error || !data) return null;
+
+  const updated = rowToUser(data);
+  saveSession(updated);
+  return updated;
 }
 
-// Generate personalized system prompt based on user
+// ── Delete Account ────────────────────────────────────────────────────────────
+export async function deleteAccount(): Promise<void> {
+  const user = getCurrentUser();
+  if (!user) return;
+
+  await supabase.from('users').delete().eq('id', user.id);
+  signOut();
+}
+
+// ── Generate Personalized Prompt ──────────────────────────────────────────────
 export function generatePersonalizedPrompt(user: User): string {
   const { preferences, memory, name } = user;
-  
+
   let prompt = `You are speaking with ${name}, `;
-  
-  // Academic level
   prompt += `a ${preferences.academicLevel} student`;
-  if (preferences.major) {
-    prompt += ` majoring in ${preferences.major}`;
-  }
+  if (preferences.major) prompt += ` majoring in ${preferences.major}`;
   prompt += '. ';
-  
-  // Learning style
+
   const learningStyleDescriptions: Record<string, string> = {
     visual: 'They learn best with diagrams, charts, and visual representations.',
     auditory: 'They learn best through verbal explanations and discussions.',
@@ -302,51 +349,33 @@ export function generatePersonalizedPrompt(user: User): string {
     kinesthetic: 'They learn best through hands-on examples and practice problems.',
   };
   prompt += learningStyleDescriptions[preferences.learningStyle] + ' ';
-  
-  // Response style
+
   const responseStyleDescriptions: Record<string, string> = {
     concise: 'Keep your responses brief and to the point.',
     detailed: 'Provide thorough, comprehensive explanations.',
     'step-by-step': 'Break down explanations into clear, numbered steps.',
   };
   prompt += responseStyleDescriptions[preferences.responseStyle] + ' ';
-  
-  // Tone
+
   const toneDescriptions: Record<string, string> = {
     formal: 'Maintain a professional and formal tone.',
     casual: 'Use a friendly, conversational tone.',
     encouraging: 'Be supportive, encouraging, and positive in your responses.',
   };
   prompt += toneDescriptions[preferences.tone] + ' ';
-  
-  // Memory context
+
   if (memory.topics.length > 0) {
     prompt += `\n\nTopics ${name} has studied recently: ${memory.topics.slice(-10).join(', ')}. `;
   }
-  
   if (memory.strengths.length > 0) {
     prompt += `Their strengths include: ${memory.strengths.join(', ')}. `;
   }
-  
   if (memory.weaknesses.length > 0) {
     prompt += `They may need extra help with: ${memory.weaknesses.join(', ')}. Provide more detailed explanations for these topics. `;
   }
-  
   if (memory.notes) {
     prompt += `\n\nAdditional context: ${memory.notes}`;
   }
-  
+
   return prompt;
 }
-
-// Delete user account
-export function deleteAccount(): void {
-  const user = getCurrentUser();
-  if (!user) return;
-  
-  const users = getAllUsers();
-  delete users[user.id];
-  saveAllUsers(users);
-  signOut();
-}
-

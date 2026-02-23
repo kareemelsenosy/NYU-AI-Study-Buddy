@@ -46,10 +46,10 @@ export function ChatSidebar({
   const [editTitle, setEditTitle] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const loadSessions = useCallback(() => {
-    const allSessions = searchQuery 
-      ? searchChatSessions(searchQuery)
-      : getAllChatSessions();
+  const loadSessions = useCallback(async () => {
+    const allSessions = searchQuery
+      ? await searchChatSessions(searchQuery)
+      : await getAllChatSessions();
     setSessions(allSessions);
   }, [searchQuery]);
 
@@ -82,10 +82,10 @@ export function ChatSidebar({
     setEditTitle(session.title);
   };
 
-  const handleEditSave = (e: React.MouseEvent, sessionId: string) => {
+  const handleEditSave = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     if (editTitle.trim()) {
-      updateChatSessionTitle(sessionId, editTitle.trim());
+      await updateChatSessionTitle(sessionId, editTitle.trim());
       setEditingId(null);
       loadSessions();
     }

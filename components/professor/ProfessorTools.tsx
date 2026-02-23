@@ -50,29 +50,37 @@ export function ProfessorTools() {
 
   const courseId = selectedCourseId || getSelectedCourseId();
   const model = getSelectedModel();
-  const courses = getAllCourses();
+  const [courses, setCourses] = useState<import('@/types').Course[]>([]);
+  const [allCourseStats, setAllCourseStats] = useState<import('@/lib/analytics').EngagementStats[]>([]);
 
   useEffect(() => {
     loadAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
-  const loadAnalytics = () => {
+  useEffect(() => {
+    getAllCourses().then(setCourses);
+    getAllCourseStats().then(setAllCourseStats);
+  }, []);
+
+  const loadAnalytics = async () => {
     if (!courseId) {
       setAnalyticsData(null);
       return;
     }
 
-    const course = getCourse(courseId);
+    const course = await getCourse(courseId);
     if (!course) return;
 
-    const stats = getEngagementStats(courseId, course.name);
-    const mostAsked = getMostAskedQuestions(courseId, 10);
-    const frequency = getQuestionFrequency(courseId, 30);
-    const peakHours = getPeakHours(courseId);
-    const categories = getQuestionCategories(courseId, 10);
-    const uniqueStudents = getUniqueStudentCount(courseId);
-    const allQuestions = getCourseQuestions(courseId);
+    const [stats, mostAsked, frequency, peakHours, categories, uniqueStudents, allQuestions] = await Promise.all([
+      getEngagementStats(courseId, course.name),
+      getMostAskedQuestions(courseId, 10),
+      getQuestionFrequency(courseId, 30),
+      getPeakHours(courseId),
+      getQuestionCategories(courseId, 10),
+      getUniqueStudentCount(courseId),
+      getCourseQuestions(courseId),
+    ]);
 
     setAnalyticsData({
       stats,
@@ -107,8 +115,8 @@ export function ProfessorTools() {
 
     setGenerating(true);
     try {
-      const course = courseId ? getCourse(courseId) : null;
-      const courseFiles = courseId ? (await import('@/lib/course-management')).getCourseFiles(courseId) : [];
+      const course = courseId ? await getCourse(courseId) : null;
+      const courseFiles = courseId ? await (await import('@/lib/course-management')).getCourseFiles(courseId) : [];
       const fileIds = courseFiles.map(cf => cf.fileId);
 
       const response = await fetch('/api/generate-quiz', {
@@ -417,7 +425,7 @@ ${analyticsData.peakHours.filter((h: any) => h.count > 0).map((h: any) => `${h.h
                 </div>
                 {courses.length > 0 ? (
                   <div className="space-y-3">
-                    {getAllCourseStats().map((stats) => (
+                    {allCourseStats.map((stats) => (
                       <div key={stats.courseId} className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-semibold text-gray-900 dark:text-gray-100">{stats.courseName}</h4>

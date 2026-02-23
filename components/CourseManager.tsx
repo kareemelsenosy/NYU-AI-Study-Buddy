@@ -31,42 +31,55 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [selectedCourseId, setSelectedCourseIdState] = useState<string | null>(null);
+  const [fileCountsMap, setFileCountsMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadCourses();
     const currentSelected = getSelectedCourseId();
     setSelectedCourseIdState(currentSelected);
-    
+
     // Listen for course changes
     const handleCoursesChange = () => loadCourses();
     window.addEventListener('courses-change', handleCoursesChange);
     return () => window.removeEventListener('courses-change', handleCoursesChange);
   }, []);
 
-  const loadCourses = () => {
+  useEffect(() => {
+    const loadFileCounts = async () => {
+      const counts: Record<string, number> = {};
+      for (const course of courses) {
+        const files = await getCourseFiles(course.id);
+        counts[course.id] = files.length;
+      }
+      setFileCountsMap(counts);
+    };
+    if (courses.length > 0) loadFileCounts();
+  }, [courses]);
+
+  const loadCourses = async () => {
     const user = getCurrentUser();
     if (user) {
-      const myCourses = getCoursesByProfessor(user.id);
+      const myCourses = await getCoursesByProfessor(user.id);
       setCourses(myCourses);
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!formData.name.trim()) return;
-    
+
     const user = getCurrentUser();
     if (!user) {
       alert('Please sign in to create courses');
       return;
     }
 
-    const course = createCourse(
+    const course = await createCourse(
       formData.name.trim(),
       formData.description.trim(),
       user.id,
       user.name
     );
-    
+
     setFormData({ name: '', description: '' });
     setShowCreateForm(false);
     // Select the newly created course
@@ -81,11 +94,12 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
     setFormData({ name: course.name, description: course.description || '' });
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingId || !formData.name.trim()) return;
-    updateCourse(editingId, { name: formData.name.trim(), description: formData.description.trim() });
+    await updateCourse(editingId, { name: formData.name.trim(), description: formData.description.trim() });
     setEditingId(null);
     setFormData({ name: '', description: '' });
+    await loadCourses();
   };
 
   const handleCancelEdit = () => {
@@ -97,10 +111,11 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
     setDeleteConfirmId(courseId);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteConfirmId) {
-      deleteCourse(deleteConfirmId);
+      await deleteCourse(deleteConfirmId);
       setDeleteConfirmId(null);
+      await loadCourses();
     }
   };
 
@@ -172,7 +187,7 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
 
       <div className="space-y-3">
         {courses.map((course) => {
-          const courseFiles = getCourseFiles(course.id);
+          const fileCount = fileCountsMap[course.id] ?? 0;
           const isSelected = selectedCourseId === course.id;
           return (
             <Card
@@ -200,7 +215,7 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
                     <p className="text-sm text-muted-foreground mb-2">{course.description}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    {courseFiles.length} file{courseFiles.length !== 1 ? 's' : ''} • {formatDate(course.updatedAt)}
+                    {fileCount} file{fileCount !== 1 ? 's' : ''} • {formatDate(course.updatedAt)}
                   </p>
                 </div>
                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>

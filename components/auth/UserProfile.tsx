@@ -46,25 +46,25 @@ export function UserProfile({ isOpen, onClose, user, onUserUpdate }: UserProfile
 
   if (!isOpen) return null;
 
-  const handleSaveProfile = () => {
-    const updated = updateName(name);
+  const handleSaveProfile = async () => {
+    const updated = await updateName(name);
     if (updated) {
-      const updatedWithPrefs = updatePreferences(preferences);
+      const updatedWithPrefs = await updatePreferences(preferences);
       toast({ title: 'Saved', description: 'Profile updated successfully', variant: 'success' });
       onUserUpdate(updatedWithPrefs || updated);
     }
   };
 
-  const handleSavePreferences = () => {
-    const updated = updatePreferences(preferences);
+  const handleSavePreferences = async () => {
+    const updated = await updatePreferences(preferences);
     if (updated) {
       toast({ title: 'Saved', description: 'AI preferences updated', variant: 'success' });
       onUserUpdate(updated);
     }
   };
 
-  const handleSaveMemory = () => {
-    const updated = updateMemory(memory);
+  const handleSaveMemory = async () => {
+    const updated = await updateMemory(memory);
     if (updated) {
       toast({ title: 'Saved', description: 'Memory updated successfully', variant: 'success' });
       onUserUpdate(updated);
@@ -92,8 +92,8 @@ export function UserProfile({ isOpen, onClose, user, onUserUpdate }: UserProfile
     toast({ title: 'Signed Out', description: 'You have been signed out', variant: 'success' });
   };
 
-  const handleDeleteAccount = () => {
-    deleteAccount();
+  const handleDeleteAccount = async () => {
+    await deleteAccount();
     onUserUpdate(null);
     onClose();
     toast({ title: 'Account Deleted', description: 'Your account has been permanently deleted', variant: 'success' });

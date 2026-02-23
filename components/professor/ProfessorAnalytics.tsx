@@ -16,32 +16,43 @@ interface ProfessorAnalyticsProps {
 }
 
 export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps) {
-  const [analytics, setAnalytics] = useState<ReturnType<typeof getCourseAnalytics> | null>(null);
-  const [mostAskedQuestions, setMostAskedQuestions] = useState<ReturnType<typeof getMostAskedQuestions>>([]);
-  const [questionActivity, setQuestionActivity] = useState<ReturnType<typeof getQuestionActivity>>([]);
-  const [peakActivityHours, setPeakActivityHours] = useState<ReturnType<typeof getPeakActivityHours>>([]);
-  const [topTopics, setTopTopics] = useState<ReturnType<typeof getTopTopics>>([]);
-  const [allCourses, setAllCourses] = useState(getAllCourses());
+  const [analytics, setAnalytics] = useState<{ totalQuestions: number; uniqueStudents: number; activeDays: number; avgQuestionsPerDay: number } | null>(null);
+  const [mostAskedQuestions, setMostAskedQuestions] = useState<Array<{ question: string; count: number }>>([]);
+  const [questionActivity, setQuestionActivity] = useState<Array<{ date: string; count: number }>>([]);
+  const [peakActivityHours, setPeakActivityHours] = useState<Array<{ hour: number; count: number }>>([]);
+  const [topTopics, setTopTopics] = useState<Array<{ topic: string; count: number }>>([]);
+  const [allCourses, setAllCourses] = useState<import('@/types').Course[]>([]);
+  const [currentCourse, setCurrentCourse] = useState<import('@/types').Course | null>(null);
   const [selectedCourseForAnalytics, setSelectedCourseForAnalytics] = useState<string | null>(getSelectedCourseId());
 
   const currentCourseId = selectedCourseForAnalytics || getSelectedCourseId();
-  const currentCourse = currentCourseId ? getCourse(currentCourseId) : null;
 
-  const loadAnalytics = useCallback(() => {
+  const loadAnalytics = useCallback(async () => {
+    const courses = await getAllCourses();
+    setAllCourses(courses);
     if (currentCourseId) {
-      setAnalytics(getCourseAnalytics(currentCourseId));
-      setMostAskedQuestions(getMostAskedQuestions(currentCourseId, 15));
-      setQuestionActivity(getQuestionActivity(currentCourseId, 30));
-      setPeakActivityHours(getPeakActivityHours(currentCourseId));
-      setTopTopics(getTopTopics(currentCourseId, 15));
+      const course = await getCourse(currentCourseId);
+      setCurrentCourse(course);
+      const [analyticsData, asked, activity, hours, topics] = await Promise.all([
+        getCourseAnalytics(currentCourseId),
+        getMostAskedQuestions(currentCourseId, 15),
+        getQuestionActivity(currentCourseId, 30),
+        getPeakActivityHours(currentCourseId),
+        getTopTopics(currentCourseId, 15),
+      ]);
+      setAnalytics(analyticsData);
+      setMostAskedQuestions(asked);
+      setQuestionActivity(activity);
+      setPeakActivityHours(hours);
+      setTopTopics(topics);
     } else {
+      setCurrentCourse(null);
       setAnalytics(null);
       setMostAskedQuestions([]);
       setQuestionActivity([]);
       setPeakActivityHours([]);
       setTopTopics([]);
     }
-    setAllCourses(getAllCourses());
   }, [currentCourseId]);
 
   useEffect(() => {

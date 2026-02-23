@@ -2,8 +2,8 @@ import { ChatSession, Message } from '@/types';
 import { getChatSession } from './chat-history';
 import { formatDate } from './utils';
 
-export function exportChatToText(sessionId: string): string {
-  const session = getChatSession(sessionId);
+export async function exportChatToText(sessionId: string): Promise<string> {
+  const session = await getChatSession(sessionId);
   if (!session) return '';
 
   let text = `NYU AI Study Buddy - Chat Export\n`;
@@ -22,9 +22,9 @@ export function exportChatToText(sessionId: string): string {
   return text;
 }
 
-export function downloadChatAsText(sessionId: string): void {
-  const text = exportChatToText(sessionId);
-  const session = getChatSession(sessionId);
+export async function downloadChatAsText(sessionId: string): Promise<void> {
+  const text = await exportChatToText(sessionId);
+  const session = await getChatSession(sessionId);
   if (!session) return;
 
   const blob = new Blob([text], { type: 'text/plain' });
@@ -38,8 +38,8 @@ export function downloadChatAsText(sessionId: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function downloadChatAsJSON(sessionId: string): void {
-  const session = getChatSession(sessionId);
+export async function downloadChatAsJSON(sessionId: string): Promise<void> {
+  const session = await getChatSession(sessionId);
   if (!session) return;
 
   const json = JSON.stringify(session, null, 2);
@@ -54,8 +54,8 @@ export function downloadChatAsJSON(sessionId: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function printChat(sessionId: string): void {
-  const session = getChatSession(sessionId);
+export async function printChat(sessionId: string): Promise<void> {
+  const session = await getChatSession(sessionId);
   if (!session) return;
 
   const printWindow = window.open('', '_blank');
@@ -70,50 +70,15 @@ export function printChat(sessionId: string): void {
       <head>
         <title>${session.title} - NYU AI Study Buddy</title>
         <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-          }
-          .header {
-            border-bottom: 2px solid #57068C;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-          }
-          .header h1 {
-            color: #57068C;
-            margin: 0;
-          }
-          .message {
-            margin-bottom: 20px;
-            padding: 15px;
-            border-radius: 8px;
-          }
-          .message.user {
-            background-color: #57068C;
-            color: white;
-            margin-left: 20%;
-          }
-          .message.assistant {
-            background-color: #f3f4f6;
-            border: 1px solid #e5e7eb;
-            margin-right: 20%;
-          }
-          .message-header {
-            font-weight: bold;
-            margin-bottom: 8px;
-            font-size: 0.9em;
-            opacity: 0.8;
-          }
-          .message-content {
-            white-space: pre-wrap;
-          }
-          @media print {
-            body { margin: 0; padding: 10px; }
-            .no-print { display: none; }
-          }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+          .header { border-bottom: 2px solid #57068C; padding-bottom: 10px; margin-bottom: 20px; }
+          .header h1 { color: #57068C; margin: 0; }
+          .message { margin-bottom: 20px; padding: 15px; border-radius: 8px; }
+          .message.user { background-color: #57068C; color: white; margin-left: 20%; }
+          .message.assistant { background-color: #f3f4f6; border: 1px solid #e5e7eb; margin-right: 20%; }
+          .message-header { font-weight: bold; margin-bottom: 8px; font-size: 0.9em; opacity: 0.8; }
+          .message-content { white-space: pre-wrap; }
+          @media print { body { margin: 0; padding: 10px; } .no-print { display: none; } }
         </style>
       </head>
       <body>
@@ -135,11 +100,7 @@ export function printChat(sessionId: string): void {
   printWindow.document.write(html);
   printWindow.document.close();
   printWindow.focus();
-  
-  // Wait for content to load, then print
-  setTimeout(() => {
-    printWindow.print();
-  }, 250);
+  setTimeout(() => { printWindow.print(); }, 250);
 }
 
 function escapeHtml(text: string): string {
@@ -147,4 +108,3 @@ function escapeHtml(text: string): string {
   div.textContent = text;
   return div.innerHTML;
 }
-

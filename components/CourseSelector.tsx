@@ -27,8 +27,8 @@ export function CourseSelector({ onCourseSelected }: CourseSelectorProps) {
     return () => window.removeEventListener('courses-change', handleCoursesChange);
   }, []);
 
-  const loadCourses = () => {
-    const allCourses = getAllCourses();
+  const loadCourses = async () => {
+    const allCourses = await getAllCourses();
     setCourses(allCourses);
   };
 

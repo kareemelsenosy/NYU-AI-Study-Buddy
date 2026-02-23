@@ -1,8 +1,4 @@
-// Analytics tracking for professor insights
-import { ChatSession } from '@/types';
-
-const STORAGE_KEY_QUESTIONS = 'nyu-study-buddy-question-analytics';
-const STORAGE_KEY_ENGAGEMENT = 'nyu-study-buddy-engagement-analytics';
+import { supabase } from '@/lib/supabase';
 
 export interface QuestionAnalytic {
   question: string;
@@ -23,240 +19,243 @@ export interface EngagementStats {
   questionsByDay: Record<string, number>;
 }
 
-// Track a question asked by a student
-export function trackQuestion(question: string, courseId: string, courseName: string, sessionId: string, userId?: string): void {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY_QUESTIONS);
-    const questions: QuestionAnalytic[] = stored ? JSON.parse(stored) : [];
-    
-    questions.push({
-      question: question.trim(),
-      courseId,
-      courseName,
-      timestamp: new Date(),
-      userId,
-      sessionId,
-    });
-    
-    // Keep only last 10,000 questions
-    if (questions.length > 10000) {
-      questions.splice(0, questions.length - 10000);
-    }
-    
-    localStorage.setItem(STORAGE_KEY_QUESTIONS, JSON.stringify(questions));
-  } catch (error) {
-    console.error('[Analytics] Error tracking question:', error);
-  }
-}
-
-// Get all questions for analytics
-export function getAllQuestions(): QuestionAnalytic[] {
-  if (typeof window === 'undefined') return [];
-  
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY_QUESTIONS);
-    if (!stored) return [];
-    
-    const questions = JSON.parse(stored) as QuestionAnalytic[];
-    return questions.map(q => ({
-      ...q,
-      timestamp: new Date(q.timestamp),
-    }));
-  } catch (error) {
-    console.error('[Analytics] Error loading questions:', error);
-    return [];
-  }
-}
-
-// Get questions for a specific course
-export function getCourseQuestions(courseId: string): QuestionAnalytic[] {
-  const allQuestions = getAllQuestions();
-  return allQuestions.filter(q => q.courseId === courseId);
-}
-
-// Get most asked questions
-export function getMostAskedQuestions(courseId?: string, limit: number = 10): Array<{ question: string; count: number }> {
-  const questions = courseId ? getCourseQuestions(courseId) : getAllQuestions();
-  
-  const questionCounts: Record<string, number> = {};
-  
-  questions.forEach(q => {
-    const normalized = q.question.toLowerCase().trim();
-    questionCounts[normalized] = (questionCounts[normalized] || 0) + 1;
+// ── Track a Question ──────────────────────────────────────────────────────────
+export async function trackQuestion(
+  question: string,
+  courseId: string,
+  courseName: string,
+  sessionId: string,
+  userId?: string
+): Promise<void> {
+  await supabase.from('analytics_events').insert({
+    question: question.trim(),
+    course_id: courseId,
+    course_name: courseName,
+    user_id: userId || null,
+    session_id: sessionId,
   });
-  
-  return Object.entries(questionCounts)
+}
+
+// ── Get All Questions ─────────────────────────────────────────────────────────
+export async function getAllQuestions(): Promise<QuestionAnalytic[]> {
+  const { data, error } = await supabase
+    .from('analytics_events')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  return data.map(row => ({
+    question: row.question,
+    courseId: row.course_id,
+    courseName: row.course_name,
+    timestamp: new Date(row.created_at),
+    userId: row.user_id || undefined,
+    sessionId: row.session_id,
+  }));
+}
+
+// ── Get Questions For a Course ────────────────────────────────────────────────
+export async function getCourseQuestions(courseId: string): Promise<QuestionAnalytic[]> {
+  const { data, error } = await supabase
+    .from('analytics_events')
+    .select('*')
+    .eq('course_id', courseId)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  return data.map(row => ({
+    question: row.question,
+    courseId: row.course_id,
+    courseName: row.course_name,
+    timestamp: new Date(row.created_at),
+    userId: row.user_id || undefined,
+    sessionId: row.session_id,
+  }));
+}
+
+// ── Most Asked Questions ──────────────────────────────────────────────────────
+export async function getMostAskedQuestions(
+  courseId?: string,
+  limit: number = 10
+): Promise<Array<{ question: string; count: number }>> {
+  const questions = courseId ? await getCourseQuestions(courseId) : await getAllQuestions();
+
+  const counts: Record<string, number> = {};
+  questions.forEach(q => {
+    const key = q.question.toLowerCase().trim();
+    counts[key] = (counts[key] || 0) + 1;
+  });
+
+  return Object.entries(counts)
     .map(([question, count]) => ({ question, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, limit);
 }
 
-// Get question frequency over time
-export function getQuestionFrequency(courseId?: string, days: number = 30): Array<{ date: string; count: number }> {
-  const questions = courseId ? getCourseQuestions(courseId) : getAllQuestions();
+// ── Question Frequency Over Time ──────────────────────────────────────────────
+export async function getQuestionFrequency(
+  courseId?: string,
+  days: number = 30
+): Promise<Array<{ date: string; count: number }>> {
   const now = new Date();
   const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  
-  const questionsByDate: Record<string, number> = {};
-  
-  // Initialize all dates in range
+
+  let query = supabase
+    .from('analytics_events')
+    .select('created_at')
+    .gte('created_at', startDate.toISOString());
+
+  if (courseId) query = query.eq('course_id', courseId);
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  // Build a date → count map initialised with 0 for all days
+  const dateMap: Record<string, number> = {};
   for (let i = 0; i < days; i++) {
-    const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-    const dateStr = date.toISOString().split('T')[0];
-    questionsByDate[dateStr] = 0;
+    const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+    dateMap[d.toISOString().split('T')[0]] = 0;
   }
-  
-  // Count questions
-  questions.forEach(q => {
-    const questionDate = new Date(q.timestamp);
-    if (questionDate >= startDate) {
-      const dateStr = questionDate.toISOString().split('T')[0];
-      if (dateStr in questionsByDate) {
-        questionsByDate[dateStr]++;
-      }
-    }
+
+  data.forEach(row => {
+    const dateStr = new Date(row.created_at).toISOString().split('T')[0];
+    if (dateStr in dateMap) dateMap[dateStr]++;
   });
-  
-  return Object.entries(questionsByDate)
+
+  return Object.entries(dateMap)
     .map(([date, count]) => ({ date, count }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// Get unique student count
-export function getUniqueStudentCount(courseId?: string): number {
-  const questions = courseId ? getCourseQuestions(courseId) : getAllQuestions();
-  return new Set(questions.map(q => q.userId || 'guest')).size;
+// ── Unique Student Count ──────────────────────────────────────────────────────
+export async function getUniqueStudentCount(courseId?: string): Promise<number> {
+  let query = supabase.from('analytics_events').select('user_id');
+  if (courseId) query = query.eq('course_id', courseId);
+
+  const { data, error } = await query;
+  if (error || !data) return 0;
+
+  return new Set(data.map(r => r.user_id || 'guest')).size;
 }
 
-// Get engagement stats for a course
-export function getEngagementStats(courseId: string, courseName: string): EngagementStats {
-  const questions = getCourseQuestions(courseId);
-  const uniqueStudents = getUniqueStudentCount(courseId);
-  
+// ── Engagement Stats For a Course ─────────────────────────────────────────────
+export async function getEngagementStats(
+  courseId: string,
+  courseName: string
+): Promise<EngagementStats> {
+  const questions = await getCourseQuestions(courseId);
+  const uniqueStudents = new Set(questions.map(q => q.userId || 'guest')).size;
+
   const questionsByDay: Record<string, number> = {};
   let lastActivity = new Date(0);
-  
+
   questions.forEach(q => {
-    const dateStr = new Date(q.timestamp).toISOString().split('T')[0];
+    const dateStr = q.timestamp.toISOString().split('T')[0];
     questionsByDay[dateStr] = (questionsByDay[dateStr] || 0) + 1;
-    
-    if (new Date(q.timestamp) > lastActivity) {
-      lastActivity = new Date(q.timestamp);
-    }
+    if (q.timestamp > lastActivity) lastActivity = q.timestamp;
   });
-  
-  const activeDays = Object.keys(questionsByDay).length;
-  
+
   return {
     courseId,
     courseName,
     totalQuestions: questions.length,
     uniqueStudents,
-    activeDays,
+    activeDays: Object.keys(questionsByDay).length,
     lastActivity,
     questionsByDay,
   };
 }
 
-// Get all course stats
-export function getAllCourseStats(): EngagementStats[] {
-  const allQuestions = getAllQuestions();
-  const courseIds = [...new Set(allQuestions.map(q => q.courseId))];
-  
-  return courseIds.map(courseId => {
-    const courseQuestions = allQuestions.filter(q => q.courseId === courseId);
-    const courseName = courseQuestions[0]?.courseName || 'Unknown';
-    return getEngagementStats(courseId, courseName);
-  });
+// ── All Course Stats ──────────────────────────────────────────────────────────
+export async function getAllCourseStats(): Promise<EngagementStats[]> {
+  const allQuestions = await getAllQuestions();
+  const courseMap = new Map<string, string>();
+  allQuestions.forEach(q => courseMap.set(q.courseId, q.courseName));
+
+  return Promise.all(
+    Array.from(courseMap.entries()).map(([id, name]) => getEngagementStats(id, name))
+  );
 }
 
-// Get peak activity hours
-export function getPeakHours(courseId?: string): Array<{ hour: number; count: number }> {
-  const questions = courseId ? getCourseQuestions(courseId) : getAllQuestions();
-  
+// ── Peak Activity Hours ───────────────────────────────────────────────────────
+export async function getPeakHours(
+  courseId?: string
+): Promise<Array<{ hour: number; count: number }>> {
+  let query = supabase.from('analytics_events').select('created_at');
+  if (courseId) query = query.eq('course_id', courseId);
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
   const hourCounts: Record<number, number> = {};
-  for (let i = 0; i < 24; i++) {
-    hourCounts[i] = 0;
-  }
-  
-  questions.forEach(q => {
-    const hour = new Date(q.timestamp).getHours();
+  for (let i = 0; i < 24; i++) hourCounts[i] = 0;
+  data.forEach(row => {
+    const hour = new Date(row.created_at).getHours();
     hourCounts[hour]++;
   });
-  
+
   return Object.entries(hourCounts)
     .map(([hour, count]) => ({ hour: parseInt(hour), count }))
     .sort((a, b) => a.hour - b.hour);
 }
 
-// Get question categories/topics
-export function getQuestionCategories(courseId?: string, limit: number = 10): Array<{ category: string; count: number }> {
-  const questions = courseId ? getCourseQuestions(courseId) : getAllQuestions();
-  
+// ── Question Categories / Topics ──────────────────────────────────────────────
+export async function getQuestionCategories(
+  courseId?: string,
+  limit: number = 10
+): Promise<Array<{ category: string; count: number }>> {
+  const questions = courseId ? await getCourseQuestions(courseId) : await getAllQuestions();
+
   const categoryCounts: Record<string, number> = {};
-  
-  // Simple keyword extraction
+  const stopWords = new Set(['what', 'when', 'where', 'which', 'this', 'that', 'these', 'those', 'could', 'would', 'should', 'about', 'chapter', 'explain', 'help']);
+
   questions.forEach(q => {
     const words = q.question.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
-    const stopWords = new Set(['what', 'when', 'where', 'which', 'this', 'that', 'these', 'those', 'could', 'would', 'should', 'about', 'chapter', 'explain', 'help']);
-    
     words.forEach(word => {
       if (!stopWords.has(word)) {
         categoryCounts[word] = (categoryCounts[word] || 0) + 1;
       }
     });
   });
-  
+
   return Object.entries(categoryCounts)
     .map(([category, count]) => ({ category, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, limit);
 }
 
-// Clear all analytics data
-export function clearAnalytics(): void {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    localStorage.removeItem(STORAGE_KEY_QUESTIONS);
-    localStorage.removeItem(STORAGE_KEY_ENGAGEMENT);
-  } catch (error) {
-    console.error('[Analytics] Error clearing analytics:', error);
+// ── Clear Analytics ───────────────────────────────────────────────────────────
+export async function clearAnalytics(courseId?: string): Promise<void> {
+  if (courseId) {
+    await supabase.from('analytics_events').delete().eq('course_id', courseId);
+  } else {
+    await supabase.from('analytics_events').delete().neq('id', 0);
   }
 }
 
-// Alias functions for ProfessorAnalytics component compatibility
-export function getCourseAnalytics(courseId: string) {
-  const questions = getCourseQuestions(courseId);
+// ── Aliases for ProfessorAnalytics component compatibility ────────────────────
+export async function getCourseAnalytics(courseId: string) {
+  const questions = await getCourseQuestions(courseId);
   const uniqueStudents = new Set(questions.map(q => q.userId || 'guest')).size;
-  
-  const dates = questions.map(q => new Date(q.timestamp).toDateString());
+  const dates = questions.map(q => q.timestamp.toDateString());
   const activeDays = new Set(dates).size;
-  
   const totalQuestions = questions.length;
   const avgQuestionsPerDay = activeDays > 0 ? totalQuestions / activeDays : 0;
-  
-  return {
-    totalQuestions,
-    uniqueStudents,
-    activeDays,
-    avgQuestionsPerDay,
-  };
+
+  return { totalQuestions, uniqueStudents, activeDays, avgQuestionsPerDay };
 }
 
-export function getQuestionActivity(courseId: string, days: number = 30) {
+export async function getQuestionActivity(courseId: string, days: number = 30) {
   return getQuestionFrequency(courseId, days);
 }
 
-export function getPeakActivityHours(courseId: string) {
+export async function getPeakActivityHours(courseId: string) {
   return getPeakHours(courseId);
 }
 
-export function getTopTopics(courseId: string, limit: number = 10) {
-  return getQuestionCategories(courseId, limit).map(item => ({
-    topic: item.category,
-    count: item.count
-  }));
+export async function getTopTopics(courseId: string, limit: number = 10) {
+  const items = await getQuestionCategories(courseId, limit);
+  return items.map(item => ({ topic: item.category, count: item.count }));
 }

@@ -20,7 +20,6 @@ import { HelpContent } from '@/components/HelpContent';
 import { getCurrentUser } from '@/lib/user-auth';
 import { User, UserRole } from '@/types';
 import { getUserRole, setUserRole as saveUserRole, getSelectedCourseId } from '@/lib/course-management';
-import { RoleSelectionModal } from '@/components/RoleSelectionModal';
 import { CourseSelector } from '@/components/CourseSelector';
 import { CourseManager } from '@/components/CourseManager';
 import { ProfessorAnalytics } from '@/components/professor/ProfessorAnalytics';
@@ -43,7 +42,6 @@ export default function Home() {
   
   // Role management
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [showRoleSelection, setShowRoleSelection] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   
   // Professor analytics
@@ -62,21 +60,18 @@ export default function Home() {
       }
     }
     
-    // Check for role (but don't show selection automatically)
+    // Check for role
     const role = getUserRole();
     if (role) {
       setUserRole(role);
       const courseId = getSelectedCourseId();
       setSelectedCourseId(courseId);
     }
-    
+
     // Listen for role changes
     const handleRoleChange = () => {
       const newRole = getUserRole();
       setUserRole(newRole);
-      if (newRole) {
-        setShowRoleSelection(false);
-      }
     };
     window.addEventListener('role-change', handleRoleChange);
     return () => window.removeEventListener('role-change', handleRoleChange);
@@ -133,11 +128,7 @@ export default function Home() {
       setShowHelp(false);
       setShowAnalytics(false);
     } else {
-      // Not signed in - will trigger role selection
-      setShowFileManager(false);
-      setShowWelcome(false);
-      setShowHelp(false);
-      setShowAnalytics(false);
+      setShowAuthModal(true);
     }
   };
 
@@ -205,13 +196,7 @@ export default function Home() {
       setShowHelp(false);
       setShowWelcome(false);
     } else {
-      // Not signed in - trigger auth flow
-      const currentRole = getUserRole();
-      if (!currentRole) {
-        setShowRoleSelection(true);
-      } else {
-        setShowAuthModal(true);
-      }
+      setShowAuthModal(true);
     }
   };
 
@@ -239,32 +224,14 @@ export default function Home() {
 
   const handleSignOut = () => {
     setUser(null);
-    // Clear role so user needs to select again on next sign in
     saveUserRole(null);
     setUserRole(null);
-  };
-
-  const handleRoleSelected = (role: UserRole) => {
-    setUserRole(role);
-    setShowRoleSelection(false);
-    // After role selection, show auth modal
-    setShowAuthModal(true);
   };
 
   // Listen for auth modal open event
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
-    const handleOpenAuth = () => {
-      // If no role selected, show role selection first
-      const currentRole = getUserRole();
-      if (!currentRole) {
-        setShowRoleSelection(true);
-      } else {
-        setShowAuthModal(true);
-      }
-    };
-
+    const handleOpenAuth = () => setShowAuthModal(true);
     window.addEventListener('open-auth-modal' as any, handleOpenAuth);
     return () => window.removeEventListener('open-auth-modal' as any, handleOpenAuth);
   }, []);
@@ -297,35 +264,18 @@ export default function Home() {
         onModelChange={handleModelChange}
         user={user}
         userRole={userRole}
-        onSignInClick={() => {
-          // If no role selected, show role selection first
-          const currentRole = getUserRole();
-          if (!currentRole) {
-            setShowRoleSelection(true);
-          } else {
-            setShowAuthModal(true);
-          }
-        }}
+        onSignInClick={() => setShowAuthModal(true)}
         onProfileClick={() => setShowProfileModal(true)}
         onSignOut={handleSignOut}
       />
       
       <main className="flex-1 overflow-hidden relative">
-        {/* Role Selection Modal */}
-        <RoleSelectionModal
-          isOpen={showRoleSelection}
-          onRoleSelected={handleRoleSelected}
-        />
-
         {/* Auth Modal */}
         <AuthModal
           isOpen={showAuthModal}
-          onClose={() => {
-            setShowAuthModal(false);
-          }}
+          onClose={() => setShowAuthModal(false)}
           onAuthSuccess={(newUser) => {
             handleAuthSuccess(newUser);
-            // Role is now set during sign up, so we don't need to show selection again
             if (newUser.role) {
               saveUserRole(newUser.role);
               setUserRole(newUser.role);
@@ -510,15 +460,9 @@ export default function Home() {
                 user={user}
                 role={userRole}
                 onGetStarted={() => {
-                  // First show role selection if no role selected, then auth
-                  const currentRole = getUserRole();
-                  if (!currentRole) {
-                    setShowRoleSelection(true);
-                  } else if (!user) {
-                    // If role selected but not signed in, show auth
+                  if (!user) {
                     setShowAuthModal(true);
                   } else {
-                    // If both role and user exist, go to file manager
                     handleGetStarted();
                   }
                 }}

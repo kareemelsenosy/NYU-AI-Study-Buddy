@@ -1,127 +1,151 @@
 import { ChatSession, Message } from '@/types';
+import { supabase } from '@/lib/supabase';
 
-const STORAGE_KEY = 'nyu-study-buddy-chat-sessions';
-const MAX_SESSIONS = 50; // Limit to prevent storage bloat
+// ── Map DB rows → ChatSession ─────────────────────────────────────────────────
+function rowsToSession(
+  sessionRow: Record<string, unknown>,
+  messageRows: Record<string, unknown>[]
+): ChatSession {
+  return {
+    id: sessionRow.id as string,
+    title: sessionRow.title as string,
+    userId: sessionRow.user_id as string | undefined,
+    createdAt: new Date(sessionRow.created_at as string),
+    updatedAt: new Date(sessionRow.updated_at as string),
+    messages: messageRows.map(m => ({
+      id: m.id as string,
+      role: m.role as 'user' | 'assistant',
+      content: m.content as string,
+      timestamp: new Date(m.created_at as string),
+    })),
+  };
+}
 
-export function getAllChatSessions(): ChatSession[] {
-  if (typeof window === 'undefined') return [];
-  
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    
-    const sessions = JSON.parse(stored) as ChatSession[];
-    // Convert date strings back to Date objects
-    return sessions.map(session => ({
-      ...session,
-      createdAt: new Date(session.createdAt),
-      updatedAt: new Date(session.updatedAt),
-      messages: session.messages.map(msg => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp),
-      })),
+// ── Get All Sessions For Current User ────────────────────────────────────────
+export async function getAllChatSessions(userId?: string): Promise<ChatSession[]> {
+  let query = supabase
+    .from('chat_sessions')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (userId) query = query.eq('user_id', userId);
+
+  const { data: sessions, error } = await query;
+  if (error || !sessions || sessions.length === 0) return [];
+
+  const sessionIds = sessions.map(s => s.id);
+  const { data: messages } = await supabase
+    .from('messages')
+    .select('*')
+    .in('session_id', sessionIds)
+    .order('created_at', { ascending: true });
+
+  const messageMap: Record<string, Record<string, unknown>[]> = {};
+  (messages || []).forEach(m => {
+    if (!messageMap[m.session_id]) messageMap[m.session_id] = [];
+    messageMap[m.session_id].push(m);
+  });
+
+  return sessions.map(s => rowsToSession(s, messageMap[s.id] || []));
+}
+
+// ── Get Single Session ────────────────────────────────────────────────────────
+export async function getChatSession(id: string): Promise<ChatSession | null> {
+  const { data: session, error } = await supabase
+    .from('chat_sessions')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !session) return null;
+
+  const { data: messages } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('session_id', id)
+    .order('created_at', { ascending: true });
+
+  return rowsToSession(session, messages || []);
+}
+
+// ── Save / Update Session ─────────────────────────────────────────────────────
+export async function saveChatSession(session: ChatSession): Promise<void> {
+  // Upsert the session row
+  await supabase.from('chat_sessions').upsert(
+    {
+      id: session.id,
+      title: session.title,
+      user_id: session.userId || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+
+  // Upsert all messages (insert new, skip existing)
+  if (session.messages.length > 0) {
+    const rows = session.messages.map(m => ({
+      id: m.id,
+      session_id: session.id,
+      role: m.role,
+      content: m.content,
+      created_at: m.timestamp instanceof Date ? m.timestamp.toISOString() : new Date(m.timestamp).toISOString(),
     }));
-  } catch (error) {
-    console.error('[ChatHistory] Error loading sessions:', error);
-    return [];
+    await supabase.from('messages').upsert(rows, { onConflict: 'id' });
   }
 }
 
-export function getChatSession(id: string): ChatSession | null {
-  const sessions = getAllChatSessions();
-  return sessions.find(s => s.id === id) || null;
+// ── Delete Session ────────────────────────────────────────────────────────────
+export async function deleteChatSession(id: string): Promise<void> {
+  // messages are deleted automatically via ON DELETE CASCADE
+  await supabase.from('chat_sessions').delete().eq('id', id);
 }
 
-export function saveChatSession(session: ChatSession): void {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    const sessions = getAllChatSessions();
-    const existingIndex = sessions.findIndex(s => s.id === session.id);
-    
-    if (existingIndex >= 0) {
-      // Update existing session
-      sessions[existingIndex] = {
-        ...session,
-        updatedAt: new Date(),
-      };
-    } else {
-      // Add new session
-      sessions.unshift({
-        ...session,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      
-      // Limit number of sessions
-      if (sessions.length > MAX_SESSIONS) {
-        sessions.splice(MAX_SESSIONS);
-      }
-    }
-    
-    // Sort by updatedAt (most recent first)
-    sessions.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-    
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-    
-    // Trigger storage event for other tabs/windows
-    window.dispatchEvent(new Event('storage'));
-  } catch (error) {
-    console.error('[ChatHistory] Error saving session:', error);
-  }
-}
-
-export function deleteChatSession(id: string): void {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    const sessions = getAllChatSessions();
-    const filtered = sessions.filter(s => s.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-  } catch (error) {
-    console.error('[ChatHistory] Error deleting session:', error);
-  }
-}
-
-export function createNewChatSession(title?: string): ChatSession {
+// ── Create New Session ────────────────────────────────────────────────────────
+export async function createNewChatSession(title?: string, userId?: string): Promise<ChatSession> {
+  const id = `chat-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   const session: ChatSession = {
-    id: `chat-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+    id,
     title: title || 'New Chat',
     messages: [],
+    userId,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  
-  saveChatSession(session);
+  await saveChatSession(session);
   return session;
 }
 
-export function updateChatSessionTitle(id: string, title: string): void {
-  const session = getChatSession(id);
-  if (session) {
-    session.title = title;
-    saveChatSession(session);
-  }
+// ── Update Title ──────────────────────────────────────────────────────────────
+export async function updateChatSessionTitle(id: string, title: string): Promise<void> {
+  await supabase
+    .from('chat_sessions')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', id);
 }
 
+// ── Search Sessions ───────────────────────────────────────────────────────────
+export async function searchChatSessions(query: string, userId?: string): Promise<ChatSession[]> {
+  const all = await getAllChatSessions(userId);
+  const lower = query.toLowerCase();
+  return all.filter(
+    s =>
+      s.title.toLowerCase().includes(lower) ||
+      s.messages.some(m => m.content.toLowerCase().includes(lower))
+  );
+}
+
+// ── Generate Title ────────────────────────────────────────────────────────────
 export async function generateChatTitle(messages: Message[]): Promise<string> {
   if (messages.length === 0) return 'New Chat';
-  
-  // If only 1-2 messages, use smart algorithm (faster)
-  if (messages.length <= 2) {
-    return generateSmartTitle(messages);
-  }
 
-  // For longer conversations, use AI to generate contextual title
+  if (messages.length <= 2) return generateSmartTitle(messages);
+
   try {
     const response = await fetch('/api/generate-title', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages }),
     });
-
     if (response.ok) {
       const data = await response.json();
       return data.title || generateSmartTitle(messages);
@@ -130,53 +154,26 @@ export async function generateChatTitle(messages: Message[]): Promise<string> {
     console.error('[ChatHistory] Error generating AI title:', error);
   }
 
-  // Fallback to smart algorithm
   return generateSmartTitle(messages);
 }
 
 function generateSmartTitle(messages: Message[]): string {
   if (messages.length === 0) return 'New Chat';
 
-  // Get first user message
   const firstUserMessage = messages.find(m => m.role === 'user');
   if (!firstUserMessage) return 'New Chat';
 
   const content = firstUserMessage.content.trim();
-  
-  // Extract key phrases (remove common words)
   const commonWords = new Set(['what', 'how', 'why', 'when', 'where', 'is', 'are', 'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'about', 'can', 'could', 'should', 'would', 'will', 'this', 'that', 'these', 'those', 'do', 'does', 'did', 'explain', 'tell', 'me', 'help', 'please']);
-  
-  const words = content.toLowerCase()
+
+  const words = content
+    .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length > 3 && !commonWords.has(w))
     .slice(0, 6);
 
-  if (words.length === 0) {
-    // Fallback: use first 40 chars
-    return content.substring(0, 40).trim() || 'New Chat';
-  }
+  if (words.length === 0) return content.substring(0, 40).trim() || 'New Chat';
 
-  // Capitalize first letter of each word and join
-  const title = words
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-
-  return title || content.substring(0, 40).trim() || 'New Chat';
+  return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
-
-export function searchChatSessions(query: string): ChatSession[] {
-  const sessions = getAllChatSessions();
-  const lowerQuery = query.toLowerCase();
-  
-  return sessions.filter(session => {
-    // Search in title
-    if (session.title.toLowerCase().includes(lowerQuery)) return true;
-    
-    // Search in messages
-    return session.messages.some(msg => 
-      msg.content.toLowerCase().includes(lowerQuery)
-    );
-  });
-}
-

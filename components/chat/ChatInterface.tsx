@@ -47,8 +47,8 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
     }
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadSession = (id: string) => {
-    const session = getChatSession(id);
+  const loadSession = async (id: string) => {
+    const session = await getChatSession(id);
     if (session) {
       setCurrentSessionId(id);
       setMessages(session.messages);
@@ -65,10 +65,10 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
     setConversationHistory([]);
   };
 
-  const createSessionIfNeeded = (): string => {
+  const createSessionIfNeeded = async (): Promise<string> => {
     // Only create a session when actually needed (first message)
     if (!currentSessionId) {
-      const newSession = createNewChatSession();
+      const newSession = await createNewChatSession();
       setCurrentSessionId(newSession.id);
       onSessionChange?.(newSession.id);
       return newSession.id;
@@ -90,7 +90,7 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
     }
 
     // Create session on first message (like ChatGPT)
-    const activeSessionId = createSessionIfNeeded();
+    const activeSessionId = await createSessionIfNeeded();
 
     const userMessage: MessageType = {
       id: generateId(),
@@ -126,14 +126,15 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
       
       // Get course file IDs if a course is selected
       const courseId = getSelectedCourseId();
-      const fileIds = courseId ? getCourseFiles(courseId).map(cf => cf.fileId) : undefined;
-      
+      const courseFileList = courseId ? await getCourseFiles(courseId) : [];
+      const fileIds = courseFileList.length > 0 ? courseFileList.map(cf => cf.fileId) : undefined;
+
       // Track question for analytics (if course is selected)
       if (courseId) {
         // Import and track asynchronously to not block the main flow
-        import('@/lib/analytics').then(({ trackQuestion }) => {
-          import('@/lib/course-management').then(({ getCourse }) => {
-            const course = getCourse(courseId);
+        import('@/lib/analytics').then(async ({ trackQuestion }) => {
+          import('@/lib/course-management').then(async ({ getCourse }) => {
+            const course = await getCourse(courseId);
             if (course) {
               trackQuestion(message, courseId, course.name, activeSessionId, user?.id);
             }
