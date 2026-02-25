@@ -1,6 +1,9 @@
-// Embedding model — defaults to OpenAI text-embedding-3-small via the NYU Portkey gateway.
-// Override with EMBEDDING_MODEL env var if the gateway uses a different virtual-key prefix.
-const DEFAULT_MODEL = '@gpt-4o/text-embedding-3-small';
+// Embedding model — NYU Portkey gateway only exposes @vertexai/gemini-embedding-001.
+// gemini-embedding-001 natively produces 3072-dim vectors; we request 1536 via the
+// `dimensions` param (Portkey translates this to Vertex AI's output_dimensionality).
+// This matches the vector(1536) column in the document_chunks table.
+const DEFAULT_MODEL = '@vertexai/gemini-embedding-001';
+const EMBEDDING_DIMENSIONS = 1536;
 const BATCH_SIZE = 100; // max inputs per single API call
 
 /**
@@ -26,7 +29,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ model, input: batch }),
+      body: JSON.stringify({ model, input: batch, dimensions: EMBEDDING_DIMENSIONS }),
     });
 
     if (!res.ok) {
