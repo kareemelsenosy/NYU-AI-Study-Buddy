@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { uploadFiles } from '@/lib/storage';
+import { embedAndStoreFile } from '@/lib/embedder';
 import { isValidFileType, formatFileSize } from '@/lib/utils';
 import { UploadResponse } from '@/types';
 
@@ -106,18 +107,29 @@ export async function POST(req: NextRequest) {
     const uploadDuration = Date.now() - uploadStart;
     
     console.log(`[UPLOAD:${requestId}] ✅ Successfully uploaded ${uploadedFiles.length} file(s) in ${uploadDuration}ms`);
-    if (courseId) {
-      console.log(`[UPLOAD:${requestId}]   Course ID provided: ${courseId} (association will happen on client)`);
-    }
-    
     uploadedFiles.forEach((file, index) => {
-      console.log(`[UPLOAD:${requestId}]   ✓ ${index + 1}/${uploadedFiles.length}: ${file.name}`);
-      console.log(`[UPLOAD:${requestId}]     URL: ${file.url}`);
+      console.log(`[UPLOAD:${requestId}]   ✓ ${index + 1}/${uploadedFiles.length}: ${file.name} → ${file.url}`);
     });
 
+    // Trigger RAG embedding in the background (non-blocking — response is sent immediately)
+    if (courseId) {
+      Promise.all(
+        uploadedFiles.map(f =>
+          embedAndStoreFile(f.id, f.name, f.url, courseId).then(result => {
+            if (result.success) {
+              console.log(`[UPLOAD:${requestId}] [EMBED] ✅ ${f.name}: ${result.chunks} chunks stored`);
+            } else {
+              console.warn(`[UPLOAD:${requestId}] [EMBED] ⚠️ ${f.name}: ${result.error}`);
+            }
+          }).catch(err => {
+            console.error(`[UPLOAD:${requestId}] [EMBED] ❌ ${f.name}:`, err);
+          })
+        )
+      ).catch(() => {});
+    }
+
     const totalDuration = Date.now() - startTime;
-    console.log(`[UPLOAD:${requestId}] ⬆️  RESPONSE: 200 OK (${totalDuration}ms total)`);
-    console.log(`[UPLOAD:${requestId}] 📊 Summary: ${uploadedFiles.length} files, ${totalDuration}ms\n`);
+    console.log(`[UPLOAD:${requestId}] ⬆️  RESPONSE: 200 OK (${totalDuration}ms total)\n`);
 
     return new Response(
       JSON.stringify({ success: true, files: uploadedFiles } as UploadResponse),

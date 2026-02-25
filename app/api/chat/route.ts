@@ -1,10 +1,14 @@
 import { NextRequest } from 'next/server';
-import { getPortkeyClient, SYSTEM_PROMPT, AI_MODEL, callPortkeyDirectly } from '@/lib/portkey';
+import { getPortkeyClient, SYSTEM_PROMPT, AI_MODEL } from '@/lib/portkey';
 import { listFiles } from '@/lib/storage';
 import { extractTextFromFile } from '@/lib/file-extractors';
+import { embedText } from '@/lib/embeddings';
+import { createServerClient } from '@/lib/supabase';
+import { trackQuestion } from '@/lib/analytics';
 import { ChatRequest, Message } from '@/types';
 
-const MAX_CONTEXT_LENGTH = 200000; // Increased to include more content
+const MAX_CONTEXT_LENGTH = 200000;
+const RAG_CHUNK_COUNT = 8; // top-K chunks to retrieve
 
 async function loadCourseMaterials(fileIds?: string[]): Promise<{ text: string; fileCount: number; fileNames: string[] }> {
   console.log('[MATERIALS] Loading course materials...', fileIds ? `(${fileIds.length} specific files)` : '(all files)');
@@ -231,6 +235,59 @@ function selectRelevantContent(question: string, fullContext: string, fileNames:
   return result;
 }
 
+// ── RAG: semantic retrieval via pgvector ──────────────────────────────────────
+async function loadCourseMaterialsRAG(
+  question: string,
+  courseId: string,
+): Promise<{ text: string; fileCount: number; fileNames: string[]; chunkCount: number } | null> {
+  try {
+    const supabase = createServerClient();
+
+    // Check whether any chunks have been embedded for this course
+    const { count } = await supabase
+      .from('document_chunks')
+      .select('*', { count: 'exact', head: true })
+      .eq('course_id', courseId);
+
+    if (!count || count === 0) {
+      console.log('[RAG] No chunks found for course, falling back to full-text search');
+      return null;
+    }
+
+    // Embed the question and run a cosine similarity search
+    const questionEmbedding = await embedText(question);
+    const embeddingStr = `[${questionEmbedding.join(',')}]`;
+
+    const { data: chunks, error } = await supabase.rpc('match_documents', {
+      query_embedding: embeddingStr,
+      match_course_id: courseId,
+      match_count: RAG_CHUNK_COUNT,
+    });
+
+    if (error || !chunks || chunks.length === 0) {
+      console.warn('[RAG] match_documents returned no results:', error?.message);
+      return null;
+    }
+
+    console.log(`[RAG] Retrieved ${chunks.length} relevant chunks`);
+
+    const fileNames = [...new Set(chunks.map((c: { file_name: string }) => c.file_name))];
+    const contextText = (chunks as { file_name: string; chunk_index: number; content: string }[])
+      .map(c => `[Source: ${c.file_name}, section ${c.chunk_index + 1}]\n${c.content}`)
+      .join('\n\n---\n\n');
+
+    return {
+      text: contextText,
+      fileCount: fileNames.length,
+      fileNames: fileNames as string[],
+      chunkCount: chunks.length,
+    };
+  } catch (err) {
+    console.warn('[RAG] Retrieval failed, falling back to full-text search:', err);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   const requestId = Math.random().toString(36).substring(7);
@@ -242,9 +299,8 @@ export async function POST(req: NextRequest) {
   
   try {
     const body: ChatRequest = await req.json();
-    const { message, conversationHistory = [], model: requestedModel, user, courseId, fileIds } = body;
-    
-    // Use model from request, or fall back to environment variable, or default
+    const { message, conversationHistory = [], model: requestedModel, user, courseId, fileIds, sessionId } = body;
+
     const modelToUse = requestedModel || AI_MODEL;
 
     console.log(`[CHAT:${requestId}] 📝 Message: "${message?.substring(0, 100)}..."`);
@@ -262,17 +318,67 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.log(`[CHAT:${requestId}] 📚 Loading course materials...`);
-    const { text: allMaterials, fileCount, fileNames } = await loadCourseMaterials(fileIds);
-    
-    const hasMaterials = fileCount > 0 && 
-                        allMaterials !== 'No course materials uploaded yet.' &&
-                        allMaterials !== 'Error loading course materials.';
-    
-    console.log(`[CHAT:${requestId}] 📊 Loaded ${fileCount} files: ${fileNames.join(', ')}`);
-    
-    const context = hasMaterials ? selectRelevantContent(message, allMaterials, fileNames, MAX_CONTEXT_LENGTH) : allMaterials;
-    console.log(`[CHAT:${requestId}] ✅ Context prepared: ${context.length} characters`);
+    // ── Material loading: try RAG first, fall back to full-text keyword search ──
+    let context: string;
+    let fileCount: number;
+    let fileNames: string[];
+    let hasMaterials: boolean;
+    let usedRAG = false;
+
+    if (courseId) {
+      console.log(`[CHAT:${requestId}] 🔍 Attempting semantic retrieval (RAG)...`);
+      const ragResult = await loadCourseMaterialsRAG(message, courseId);
+      if (ragResult && ragResult.chunkCount > 0) {
+        context    = ragResult.text;
+        fileCount  = ragResult.fileCount;
+        fileNames  = ragResult.fileNames;
+        hasMaterials = true;
+        usedRAG    = true;
+        console.log(`[CHAT:${requestId}] ✅ RAG: ${ragResult.chunkCount} chunks from ${fileCount} file(s): ${fileNames.join(', ')}`);
+      } else {
+        console.log(`[CHAT:${requestId}] ↩️  RAG unavailable, falling back to full-text search`);
+        const fallback = await loadCourseMaterials(fileIds);
+        hasMaterials = fallback.fileCount > 0 &&
+                       fallback.text !== 'No course materials uploaded yet.' &&
+                       fallback.text !== 'Error loading course materials.';
+        context   = hasMaterials ? selectRelevantContent(message, fallback.text, fallback.fileNames, MAX_CONTEXT_LENGTH) : fallback.text;
+        fileCount = fallback.fileCount;
+        fileNames = fallback.fileNames;
+      }
+    } else {
+      console.log(`[CHAT:${requestId}] 📚 No courseId — loading all materials (full-text search)`);
+      const fallback = await loadCourseMaterials(fileIds);
+      hasMaterials = fallback.fileCount > 0 &&
+                     fallback.text !== 'No course materials uploaded yet.' &&
+                     fallback.text !== 'Error loading course materials.';
+      context   = hasMaterials ? selectRelevantContent(message, fallback.text, fallback.fileNames, MAX_CONTEXT_LENGTH) : fallback.text;
+      fileCount = fallback.fileCount;
+      fileNames = fallback.fileNames;
+    }
+
+    console.log(`[CHAT:${requestId}] ✅ Context ready: ${context.length} chars | RAG=${usedRAG}`);
+
+    // ── Analytics: track student questions (fire-and-forget) ──────────────────
+    if (courseId && user?.role !== 'professor') {
+      const supabase = createServerClient();
+      supabase
+        .from('courses')
+        .select('name')
+        .eq('id', courseId)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            trackQuestion(
+              message,
+              courseId,
+              data.name,
+              sessionId || requestId,
+              user?.id,
+            ).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
 
     // Generate personalized system prompt if user is logged in
     let personalizedPrompt = SYSTEM_PROMPT;
@@ -425,7 +531,7 @@ CRITICAL INSTRUCTIONS:
 6. DO NOT use your general knowledge to answer questions not covered in the uploaded materials`;
       }
     } else {
-      userMessageContent = `Note: ${allMaterials}\n\nStudent Question: ${message}\n\nCRITICAL: You MUST ONLY respond with: "No course materials are available. Please upload course materials first." DO NOT provide any answer or explanation to the question.`;
+      userMessageContent = `Note: ${context}\n\nStudent Question: ${message}\n\nCRITICAL: You MUST ONLY respond with: "No course materials are available. Please upload course materials first." DO NOT provide any answer or explanation to the question.`;
     }
     messages.push({ role: 'user', content: userMessageContent });
 

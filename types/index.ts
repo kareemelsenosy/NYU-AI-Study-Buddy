@@ -21,11 +21,13 @@ export interface ChatRequest {
   courseId?: string; // Optional: Course ID to filter materials
   fileIds?: string[]; // Optional: Specific file IDs to include (for course filtering)
   user?: {
+    id?: string;
     name: string;
     preferences: UserPreferences;
     memory: UserMemory;
     role?: UserRole;
   } | null;
+  sessionId?: string; // for analytics tracking
 }
 
 export interface UploadResponse {

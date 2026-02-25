@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { listFiles, deleteFile } from '@/lib/storage';
+import { deleteFileChunks } from '@/lib/embedder';
 import { FileListResponse } from '@/types';
 
 export async function GET(req: NextRequest) {
@@ -87,9 +88,12 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    console.log(`[FILES:${requestId}] 🚀 Deleting file...`);
+    console.log(`[FILES:${requestId}] 🚀 Deleting file and its chunks...`);
     const deleteStart = Date.now();
-    await deleteFile(fileId);
+    await Promise.all([
+      deleteFile(fileId),
+      deleteFileChunks(fileId),
+    ]);
     const deleteDuration = Date.now() - deleteStart;
     const totalDuration = Date.now() - startTime;
     
