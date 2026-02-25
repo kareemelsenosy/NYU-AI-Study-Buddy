@@ -40,6 +40,7 @@ function rowToCourse(row: Record<string, unknown>, fileIds: string[] = []): Cour
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
     fileIds,
+    isVisible: row.is_visible !== false, // default to true if column doesn't exist yet
   };
 }
 
@@ -66,6 +67,41 @@ export async function getAllCourses(): Promise<Course[]> {
   });
 
   return courses.map(c => rowToCourse(c, fileMap[c.id] || []));
+}
+
+// ── Get Visible Courses (for students) ───────────────────────────────────────
+export async function getVisibleCourses(): Promise<Course[]> {
+  const { data: courses, error } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('is_visible', true)
+    .order('created_at', { ascending: false });
+
+  if (error || !courses) return [];
+
+  const courseIds = courses.map(c => c.id);
+  if (courseIds.length === 0) return [];
+
+  const { data: files } = await supabase
+    .from('course_files')
+    .select('course_id, file_id')
+    .in('course_id', courseIds);
+
+  const fileMap: Record<string, string[]> = {};
+  (files || []).forEach(f => {
+    if (!fileMap[f.course_id]) fileMap[f.course_id] = [];
+    fileMap[f.course_id].push(f.file_id);
+  });
+
+  return courses.map(c => rowToCourse(c, fileMap[c.id] || []));
+}
+
+// ── Toggle Course Visibility ──────────────────────────────────────────────────
+export async function updateCourseVisibility(id: string, isVisible: boolean): Promise<void> {
+  await supabase
+    .from('courses')
+    .update({ is_visible: isVisible, updated_at: new Date().toISOString() })
+    .eq('id', id);
 }
 
 // ── Get Single Course ─────────────────────────────────────────────────────────

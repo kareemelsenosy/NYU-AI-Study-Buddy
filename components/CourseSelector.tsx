@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Course } from '@/types';
-import { getAllCourses, setSelectedCourseId, getSelectedCourseId } from '@/lib/course-management';
+import { getVisibleCourses, setSelectedCourseId, getSelectedCourseId } from '@/lib/course-management';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { BookOpen, Check } from 'lucide-react';
@@ -28,7 +28,7 @@ export function CourseSelector({ onCourseSelected }: CourseSelectorProps) {
   }, []);
 
   const loadCourses = async () => {
-    const allCourses = await getAllCourses();
+    const allCourses = await getVisibleCourses();
     setCourses(allCourses);
   };
 

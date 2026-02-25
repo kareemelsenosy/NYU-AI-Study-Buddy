@@ -100,6 +100,7 @@ export interface Course {
   createdAt: Date;
   updatedAt: Date;
   fileIds: string[]; // File IDs associated with this course
+  isVisible: boolean; // Whether students can see and select this course
 }
 
 export interface CourseFile {

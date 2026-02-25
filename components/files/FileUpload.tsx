@@ -105,10 +105,10 @@ export function FileUpload({ onUploadComplete, courseId, courseName }: FileUploa
           uploadedAt: file.uploadedAt ? new Date(file.uploadedAt) : new Date(),
         }));
         
-        // Associate files with course on client side
+        // Associate files with course on client side (pass URL and size so course_files table is complete)
         const { addFileToCourse } = await import('@/lib/course-management');
         filesWithDates.forEach((file: any) => {
-          addFileToCourse(courseId, file.id, file.name);
+          addFileToCourse(courseId, file.id, file.name, file.url || '', file.size || 0, file.type || 'unknown');
         });
         
         toast({

@@ -10,7 +10,7 @@ import {
   Calendar, Target, Zap, Eye
 } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
-import { getSelectedCourseId, getAllCourses, getCourse } from '@/lib/course-management';
+import { getSelectedCourseId, getCoursesByProfessor, getCourse } from '@/lib/course-management';
 import { getSelectedModel } from '@/lib/models';
 import {
   getMostAskedQuestions,
@@ -59,7 +59,12 @@ export function ProfessorTools() {
   }, [courseId]);
 
   useEffect(() => {
-    getAllCourses().then(setCourses);
+    import('@/lib/user-auth').then(({ getCurrentUser }) => {
+      const user = getCurrentUser();
+      if (user) {
+        getCoursesByProfessor(user.id).then(setCourses);
+      }
+    });
     getAllCourseStats().then(setAllCourseStats);
   }, []);
 

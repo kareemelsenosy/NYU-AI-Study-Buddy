@@ -2,18 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { Course } from '@/types';
-import { 
-  getAllCourses, 
-  createCourse, 
-  updateCourse, 
+import {
+  createCourse,
+  updateCourse,
   deleteCourse,
   getCoursesByProfessor,
   getCourseFiles,
+  updateCourseVisibility,
 } from '@/lib/course-management';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Edit2, Trash2, X, Check, BookOpen, Upload } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Check, BookOpen, Eye, EyeOff } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { getCurrentUser } from '@/lib/user-auth';
 import { formatDate } from '@/lib/utils';
@@ -105,6 +105,11 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
   const handleCancelEdit = () => {
     setEditingId(null);
     setFormData({ name: '', description: '' });
+  };
+
+  const handleToggleVisibility = async (course: Course) => {
+    await updateCourseVisibility(course.id, !course.isVisible);
+    await loadCourses();
   };
 
   const handleDelete = (courseId: string) => {
@@ -205,11 +210,20 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h4 className="font-semibold">{course.name}</h4>
                     {isSelected && (
                       <span className="text-xs bg-[#57068C] text-white px-2 py-0.5 rounded-full">Selected</span>
                     )}
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        course.isVisible
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                      }`}
+                    >
+                      {course.isVisible ? 'Visible to students' : 'Hidden from students'}
+                    </span>
                   </div>
                   {course.description && (
                     <p className="text-sm text-muted-foreground mb-2">{course.description}</p>
@@ -218,7 +232,16 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
                     {fileCount} file{fileCount !== 1 ? 's' : ''} • {formatDate(course.updatedAt)}
                   </p>
                 </div>
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => handleToggleVisibility(course)}
+                    title={course.isVisible ? 'Hide from students' : 'Make visible to students'}
+                    className={course.isVisible ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'}
+                  >
+                    {course.isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"

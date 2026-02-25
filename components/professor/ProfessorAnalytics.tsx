@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { X, FileDown, MessageSquareText, Users, Clock, Hash, Layers, TrendingUp, Calendar, BarChart3 } from 'lucide-react';
-import { getSelectedCourseId, getCourse, getAllCourses } from '@/lib/course-management';
+import { getSelectedCourseId, getCourse, getCoursesByProfessor } from '@/lib/course-management';
 import { getCourseAnalytics, getMostAskedQuestions, getQuestionActivity, getPeakActivityHours, getTopTopics } from '@/lib/analytics';
 // @ts-ignore - recharts has type issues with Next.js
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell, Area, AreaChart } from 'recharts';
@@ -28,7 +28,9 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
   const currentCourseId = selectedCourseForAnalytics || getSelectedCourseId();
 
   const loadAnalytics = useCallback(async () => {
-    const courses = await getAllCourses();
+    const { getCurrentUser } = await import('@/lib/user-auth');
+    const user = getCurrentUser();
+    const courses = user ? await getCoursesByProfessor(user.id) : [];
     setAllCourses(courses);
     if (currentCourseId) {
       const course = await getCourse(currentCourseId);
