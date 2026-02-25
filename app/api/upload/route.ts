@@ -3,6 +3,7 @@ import { uploadFiles } from '@/lib/storage';
 import { embedAndStoreFile } from '@/lib/embedder';
 import { isValidFileType, formatFileSize } from '@/lib/utils';
 import { UploadResponse } from '@/types';
+import { createServerClient } from '@/lib/supabase';
 
 const MAX_FILES = 10;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -29,6 +30,49 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const files = formData.getAll('files') as File[];
     const courseId = formData.get('courseId') as string | null;
+    const userId = formData.get('userId') as string | null;
+
+    // ── Auth check: verify that the caller owns this course ───────────────────
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Authentication required' } as UploadResponse),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (courseId) {
+      const serverSupabase = createServerClient();
+      const { data: course } = await serverSupabase
+        .from('courses')
+        .select('professor_id')
+        .eq('id', courseId)
+        .single();
+
+      if (!course) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Course not found' } as UploadResponse),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (course.professor_id !== userId) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Not authorized for this course' } as UploadResponse),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Verify the user has role=professor in the users table
+      const { data: userRow } = await serverSupabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      if (!userRow || userRow.role !== 'professor') {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Only professors can upload files' } as UploadResponse),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     console.log(`[UPLOAD:${requestId}] ✅ Form data parsed successfully`);
     console.log(`[UPLOAD:${requestId}] 📦 Files received: ${files.length}`);

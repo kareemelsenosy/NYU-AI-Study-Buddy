@@ -318,6 +318,27 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── Course validation: check course exists and is accessible ─────────────
+    let validatedCourseId = courseId;
+    if (courseId) {
+      const courseSupabase = createServerClient();
+      const { data: courseRow } = await courseSupabase
+        .from('courses')
+        .select('is_visible, professor_id')
+        .eq('id', courseId)
+        .single();
+
+      if (!courseRow) {
+        // Course doesn't exist — proceed without course context
+        validatedCourseId = undefined;
+        console.log(`[CHAT:${requestId}] ⚠️  Course ${courseId} not found — proceeding without course context`);
+      } else if (user?.role !== 'professor' && !courseRow.is_visible) {
+        // Student trying to access a hidden course — deny course context silently
+        validatedCourseId = undefined;
+        console.log(`[CHAT:${requestId}] ⚠️  Course ${courseId} is hidden — student access denied for course context`);
+      }
+    }
+
     // ── Material loading: try RAG first, fall back to full-text keyword search ──
     let context: string;
     let fileCount: number;
@@ -325,9 +346,9 @@ export async function POST(req: NextRequest) {
     let hasMaterials: boolean;
     let usedRAG = false;
 
-    if (courseId) {
+    if (validatedCourseId) {
       console.log(`[CHAT:${requestId}] 🔍 Attempting semantic retrieval (RAG)...`);
-      const ragResult = await loadCourseMaterialsRAG(message, courseId);
+      const ragResult = await loadCourseMaterialsRAG(message, validatedCourseId);
       if (ragResult && ragResult.chunkCount > 0) {
         context    = ragResult.text;
         fileCount  = ragResult.fileCount;
@@ -359,18 +380,18 @@ export async function POST(req: NextRequest) {
     console.log(`[CHAT:${requestId}] ✅ Context ready: ${context.length} chars | RAG=${usedRAG}`);
 
     // ── Analytics: track student questions (fire-and-forget) ──────────────────
-    if (courseId && user?.role !== 'professor') {
+    if (validatedCourseId && user?.role !== 'professor') {
       const supabase = createServerClient();
       supabase
         .from('courses')
         .select('name')
-        .eq('id', courseId)
+        .eq('id', validatedCourseId)
         .single()
         .then(({ data }) => {
           if (data) {
             trackQuestion(
               message,
-              courseId,
+              validatedCourseId!,
               data.name,
               sessionId || requestId,
               user?.id,

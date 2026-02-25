@@ -96,7 +96,8 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
 
   const handleSaveEdit = async () => {
     if (!editingId || !formData.name.trim()) return;
-    await updateCourse(editingId, { name: formData.name.trim(), description: formData.description.trim() });
+    const user = getCurrentUser();
+    await updateCourse(editingId, { name: formData.name.trim(), description: formData.description.trim() }, user?.id ?? '');
     setEditingId(null);
     setFormData({ name: '', description: '' });
     await loadCourses();
@@ -118,7 +119,8 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
 
   const confirmDelete = async () => {
     if (deleteConfirmId) {
-      await deleteCourse(deleteConfirmId);
+      const user = getCurrentUser();
+      await deleteCourse(deleteConfirmId, user?.id ?? '');
       setDeleteConfirmId(null);
       await loadCourses();
     }

@@ -15,9 +15,10 @@ import { getUserRole, getCourse } from '@/lib/course-management';
 interface FileListProps {
   onFilesChange?: () => void;
   courseId?: string;
+  onGoToChat?: () => void;
 }
 
-export function FileList({ onFilesChange, courseId }: FileListProps) {
+export function FileList({ onFilesChange, courseId, onGoToChat }: FileListProps) {
   const userRole = getUserRole();
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,12 +183,7 @@ export function FileList({ onFilesChange, courseId }: FileListProps) {
       {files.length > 0 && (
         <div className="flex justify-end pt-2">
           <Button
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                const event = new CustomEvent('go-to-chat');
-                window.dispatchEvent(event);
-              }
-            }}
+            onClick={() => onGoToChat?.()}
             className="bg-[#57068C] hover:bg-[#6A0BA8] text-white"
           >
             <MessageSquare className="h-4 w-4 mr-2" />

@@ -75,6 +75,13 @@ export function FileUpload({ onUploadComplete, courseId, courseName }: FileUploa
     });
     formData.append('courseId', courseId);
 
+    // Send userId so the server can verify course ownership
+    const { getCurrentUser } = await import('@/lib/user-auth');
+    const currentUser = getCurrentUser();
+    if (currentUser?.id) {
+      formData.append('userId', currentUser.id);
+    }
+
     try {
       console.log('[FileUpload] Sending request to /api/upload');
       const response = await fetch('/api/upload', {

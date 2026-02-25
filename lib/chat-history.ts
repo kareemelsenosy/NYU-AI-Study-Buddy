@@ -10,6 +10,7 @@ function rowsToSession(
     id: sessionRow.id as string,
     title: sessionRow.title as string,
     userId: sessionRow.user_id as string | undefined,
+    courseId: sessionRow.course_id as string | undefined,
     createdAt: new Date(sessionRow.created_at as string),
     updatedAt: new Date(sessionRow.updated_at as string),
     messages: messageRows.map(m => ({
@@ -76,6 +77,7 @@ export async function saveChatSession(session: ChatSession): Promise<void> {
       id: session.id,
       title: session.title,
       user_id: session.userId || null,
+      course_id: session.courseId || null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'id' }
@@ -113,6 +115,29 @@ export async function createNewChatSession(title?: string, userId?: string): Pro
   };
   await saveChatSession(session);
   return session;
+}
+
+// ── Load Latest Session For A User ───────────────────────────────────────────
+// Returns the most recent session (with messages) for the given user so it can
+// be restored on page load instead of starting a blank chat every time.
+export async function loadLatestSession(userId: string): Promise<ChatSession | null> {
+  const { data: session, error } = await supabase
+    .from('chat_sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !session) return null;
+
+  const { data: messages } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('session_id', session.id)
+    .order('created_at', { ascending: true });
+
+  return rowsToSession(session, messages || []);
 }
 
 // ── Update Title ──────────────────────────────────────────────────────────────

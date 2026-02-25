@@ -54,7 +54,8 @@ export interface ChatSession {
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
-  userId?: string; // Optional user association
+  userId?: string;   // Optional user association
+  courseId?: string; // Optional course association
 }
 
 // User Account Types

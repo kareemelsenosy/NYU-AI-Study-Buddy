@@ -11,9 +11,10 @@ interface HelpContentProps {
   onGetStarted?: () => void;
   onStartChat?: () => void;
   onViewAnalytics?: () => void;
+  onExampleQuestion?: (question: string) => void;
 }
 
-export function HelpContent({ user, role, onGetStarted, onStartChat, onViewAnalytics }: HelpContentProps) {
+export function HelpContent({ user, role, onGetStarted, onStartChat, onViewAnalytics, onExampleQuestion }: HelpContentProps) {
   // Only show role-specific content if user is signed in AND has a role selected
   const isProfessor = user && role === 'professor';
   const isStudent = user && role === 'student';
@@ -117,9 +118,7 @@ export function HelpContent({ user, role, onGetStarted, onStartChat, onViewAnaly
               <button
                 key={i}
                 onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('example-question', { detail: q }));
-                  }
+                  onExampleQuestion?.(q);
                   onStartChat?.();
                 }}
                 className="px-4 py-2 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 hover:border-[#57068C] hover:text-[#57068C] dark:hover:text-purple-400 transition-colors"

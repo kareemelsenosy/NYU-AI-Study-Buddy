@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { X, MessageSquare, SidebarOpen, SidebarClose, Upload } from 'lucide-react';
 import { downloadChatAsText, printChat } from '@/lib/chat-export';
-import { createNewChatSession, deleteChatSession } from '@/lib/chat-history';
+import { createNewChatSession, deleteChatSession, loadLatestSession } from '@/lib/chat-history';
 import { getSelectedModel } from '@/lib/models';
 import { toast } from '@/components/ui/toast';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -47,6 +47,9 @@ export default function Home() {
   // Professor analytics
   const [showAnalytics, setShowAnalytics] = useState(false);
 
+  // Pending example question (replaces window 'example-question' event)
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+
   // Initialize selected model, user, and role on mount
   useEffect(() => {
     setSelectedModel(getSelectedModel());
@@ -58,6 +61,10 @@ export default function Home() {
         saveUserRole(currentUser.role);
         setUserRole(currentUser.role);
       }
+      // Restore the most recent chat session from Supabase
+      loadLatestSession(currentUser.id).then(latest => {
+        if (latest) setCurrentChatSessionId(latest.id);
+      });
     }
     
     // Check for role
@@ -99,19 +106,7 @@ export default function Home() {
     checkFiles();
   }, []);
 
-  // Listen for go-to-chat event
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const handleGoToChatEvent = () => {
-      handleGoToChat();
-    };
-
-    window.addEventListener('go-to-chat' as any, handleGoToChatEvent);
-    return () => {
-      window.removeEventListener('go-to-chat' as any, handleGoToChatEvent);
-    };
-  }, []);
+  // go-to-chat and open-auth-modal are now handled via prop callbacks (no window events)
 
   const handleGetStarted = () => {
     // Different behavior based on role
@@ -214,8 +209,13 @@ export default function Home() {
   };
 
   // Auth handlers
-  const handleAuthSuccess = (newUser: User) => {
+  const handleAuthSuccess = async (newUser: User) => {
     setUser(newUser);
+    // Restore the user's most recent chat session from the database
+    const latest = await loadLatestSession(newUser.id);
+    if (latest) {
+      setCurrentChatSessionId(latest.id);
+    }
   };
 
   const handleUserUpdate = (updatedUser: User | null) => {
@@ -228,13 +228,7 @@ export default function Home() {
     setUserRole(null);
   };
 
-  // Listen for auth modal open event
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleOpenAuth = () => setShowAuthModal(true);
-    window.addEventListener('open-auth-modal' as any, handleOpenAuth);
-    return () => window.removeEventListener('open-auth-modal' as any, handleOpenAuth);
-  }, []);
+  // open-auth-modal is now handled via onOpenAuthModal prop on ChatInterface (no window event)
 
   const handleCourseSelected = (courseId: string) => {
     setSelectedCourseId(courseId);
@@ -330,14 +324,19 @@ export default function Home() {
                 </Button>
               </div>
               <div className="p-6 overflow-y-auto max-h-[calc(85vh-88px)]">
-                <HelpContent 
+                <HelpContent
                   user={user}
                   role={userRole}
                   onGetStarted={() => {
                     handleCloseModal();
                     handleGetStarted();
-                  }} 
+                  }}
                   onStartChat={() => {
+                    handleCloseModal();
+                    handleGoToChat();
+                  }}
+                  onExampleQuestion={(q) => {
+                    setPendingQuestion(q);
                     handleCloseModal();
                     handleGoToChat();
                   }}
@@ -404,6 +403,10 @@ export default function Home() {
                 <div className="border-t pt-6">
                   <FileList
                     courseId={selectedCourseId || undefined}
+                    onGoToChat={() => {
+                      setShowFileManager(false);
+                      handleGoToChat();
+                    }}
                     onFilesChange={() => {
                       setHasFiles(true);
                     }}
@@ -456,9 +459,10 @@ export default function Home() {
         {showWelcome && !showHelp && !showFileManager && !showAnalytics ? (
           <div className="h-full overflow-auto">
             <div className="min-h-full flex items-center justify-center py-12">
-              <WelcomeSection 
+              <WelcomeSection
                 user={user}
                 role={userRole}
+                onGoToChat={handleGoToChat}
                 onGetStarted={() => {
                   if (!user) {
                     setShowAuthModal(true);
@@ -538,13 +542,17 @@ export default function Home() {
               </div>
               
               <div className="flex-1 min-h-0 overflow-hidden p-6" style={{ height: '100%', minHeight: 0 }}>
-                <ChatInterface 
+                <ChatInterface
                   key={chatKey}
                   sessionId={currentChatSessionId}
                   onSessionChange={setCurrentChatSessionId}
                   selectedModel={selectedModel}
                   onModelChange={handleModelChange}
                   user={user}
+                  courseId={selectedCourseId}
+                  onOpenAuthModal={() => setShowAuthModal(true)}
+                  pendingQuestion={pendingQuestion}
+                  onPendingQuestionConsumed={() => setPendingQuestion(null)}
                 />
               </div>
             </div>

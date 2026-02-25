@@ -170,7 +170,8 @@ export async function createCourse(
 // ── Update Course ─────────────────────────────────────────────────────────────
 export async function updateCourse(
   id: string,
-  updates: Partial<Pick<Course, 'name' | 'description'>>
+  updates: Partial<Pick<Course, 'name' | 'description'>>,
+  professorId: string
 ): Promise<void> {
   await supabase
     .from('courses')
@@ -179,13 +180,14 @@ export async function updateCourse(
       ...(updates.description !== undefined && { description: updates.description }),
       updated_at: new Date().toISOString(),
     })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('professor_id', professorId); // Ownership check: no-op if professor doesn't own this course
 }
 
 // ── Delete Course ─────────────────────────────────────────────────────────────
-export async function deleteCourse(id: string): Promise<void> {
-  // course_files rows are deleted automatically via ON DELETE CASCADE
-  await supabase.from('courses').delete().eq('id', id);
+export async function deleteCourse(id: string, professorId: string): Promise<void> {
+  // course_files and document_chunks are deleted automatically via ON DELETE CASCADE
+  await supabase.from('courses').delete().eq('id', id).eq('professor_id', professorId); // Ownership check
 }
 
 // ── Get Course Files ──────────────────────────────────────────────────────────

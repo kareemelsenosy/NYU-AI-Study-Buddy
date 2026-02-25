@@ -10,9 +10,10 @@ interface WelcomeSectionProps {
   role?: UserRole | null;
   onGetStarted?: () => void;
   onViewAnalytics?: () => void;
+  onGoToChat?: () => void;
 }
 
-export function WelcomeSection({ user, role, onGetStarted, onViewAnalytics }: WelcomeSectionProps) {
+export function WelcomeSection({ user, role, onGetStarted, onViewAnalytics, onGoToChat }: WelcomeSectionProps) {
   // Only show role-specific content if user is signed in AND has a role selected
   // If no user is signed in, always show default welcome
   const isProfessor = user !== null && role === 'professor';
@@ -49,11 +50,7 @@ export function WelcomeSection({ user, role, onGetStarted, onViewAnalytics }: We
             <Button
               variant="outline"
               size="lg"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('go-to-chat'));
-                }
-              }}
+              onClick={() => onGoToChat?.()}
               className="h-14 px-8 text-base border-2 border-gray-200 dark:border-gray-700 hover:border-[#57068C] dark:hover:border-purple-500 rounded-xl transition-all duration-300 hover:-translate-y-0.5"
             >
               <MessageSquare className="h-5 w-5 mr-2" />

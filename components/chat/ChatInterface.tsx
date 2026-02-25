@@ -22,9 +22,15 @@ interface ChatInterfaceProps {
   selectedModel?: string;
   onModelChange?: (modelId: string) => void;
   user?: User | null;
+  courseId?: string | null;               // Active course to associate with the session
+  onOpenAuthModal?: () => void;           // Replaces window event
+  pendingQuestion?: string | null;        // Example question to send automatically
+  onPendingQuestionConsumed?: () => void; // Clears the pending question in parent
 }
 
-export function ChatInterface({ sessionId, onSessionChange, selectedModel, onModelChange, user }: ChatInterfaceProps) {
+const SESSION_STORAGE_KEY = 'nyu-study-buddy-current-session';
+
+export function ChatInterface({ sessionId, onSessionChange, selectedModel, onModelChange, user, courseId, onOpenAuthModal, pendingQuestion, onPendingQuestionConsumed }: ChatInterfaceProps) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -68,8 +74,12 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
   const createSessionIfNeeded = async (): Promise<string> => {
     // Only create a session when actually needed (first message)
     if (!currentSessionId) {
-      const newSession = await createNewChatSession();
+      const newSession = await createNewChatSession(undefined, user?.id);
       setCurrentSessionId(newSession.id);
+      // Persist session ID so refresh restores the same session
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(SESSION_STORAGE_KEY, newSession.id);
+      }
       onSessionChange?.(newSession.id);
       return newSession.id;
     }
@@ -219,6 +229,8 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
                       id: activeSessionId,
                       title: title,
                       messages: finalMessages,
+                      userId: user?.id,
+                      courseId: courseId ?? undefined,
                       createdAt: new Date(),
                       updatedAt: new Date(),
                     };
@@ -280,6 +292,8 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
             id: activeSessionId,
             title: title,
             messages: finalMessages,
+            userId: user?.id,
+            courseId: courseId ?? undefined,
             createdAt: new Date(),
             updatedAt: new Date(),
           };
@@ -324,19 +338,13 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
     }
   }, [conversationHistory, getCurrentModel, messages, user, currentSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Handle pending example question from parent (replaces window 'example-question' event)
   useEffect(() => {
-    // Only add event listener on client side
-    if (typeof window === 'undefined') return;
-
-    const handleExampleQuestion = (e: CustomEvent) => {
-      handleSend(e.detail);
-    };
-
-    window.addEventListener('example-question' as any, handleExampleQuestion);
-    return () => {
-      window.removeEventListener('example-question' as any, handleExampleQuestion);
-    };
-  }, [handleSend]);
+    if (pendingQuestion) {
+      handleSend(pendingQuestion);
+      onPendingQuestionConsumed?.();
+    }
+  }, [pendingQuestion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClear = () => {
     setMessages([]);
@@ -348,6 +356,8 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
         id: currentSessionId,
         title: 'New Chat',
         messages: [],
+        userId: user?.id,
+        courseId: courseId ?? undefined,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -370,6 +380,8 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
         id: currentSessionId,
         title: title,
         messages: currentMessages,
+        userId: user?.id,
+        courseId: courseId ?? undefined,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -382,17 +394,14 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
   return (
     <div className="flex flex-col h-full min-h-0 bg-gradient-to-b from-gray-50/50 to-white dark:from-gray-950 dark:to-gray-900" style={{ height: '100%' }}>
       <div className="flex-1 min-h-0 overflow-hidden" style={{ minHeight: 0, height: '100%' }}>
-        <MessageList messages={messages} isTyping={isTyping} user={user} />
+        <MessageList messages={messages} isTyping={isTyping} user={user} onExampleQuestion={handleSend} />
       </div>
-      <MessageInput 
-        onSend={handleSend} 
-        disabled={isTyping} 
+      <MessageInput
+        onSend={handleSend}
+        disabled={isTyping}
         onModelChange={onModelChange}
         onSignInClick={() => {
-          // Trigger sign in modal
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('open-auth-modal'));
-          }
+          onOpenAuthModal?.();
         }}
       />
     </div>

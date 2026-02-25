@@ -9,9 +9,10 @@ interface MessageListProps {
   messages: MessageType[];
   isTyping: boolean;
   user?: User | null;
+  onExampleQuestion?: (question: string) => void;
 }
 
-export function MessageList({ messages, isTyping, user }: MessageListProps) {
+export function MessageList({ messages, isTyping, user, onExampleQuestion }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only show professor-specific content if user is signed in AND has professor role
   const isProfessor = user?.role === 'professor';
@@ -108,12 +109,7 @@ export function MessageList({ messages, isTyping, user }: MessageListProps) {
                   <button
                     key={idx}
                     className="text-left p-5 rounded-xl bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-[#57068C] hover:bg-purple-50/50 dark:hover:bg-purple-950/30 transition-all text-sm font-medium shadow-sm hover:shadow-lg group backdrop-blur-sm"
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        const event = new CustomEvent('example-question', { detail: question });
-                        window.dispatchEvent(event);
-                      }
-                    }}
+                    onClick={() => onExampleQuestion?.(question)}
                   >
                     <span className="group-hover:text-[#57068C] dark:group-hover:text-purple-400 transition-colors text-gray-700 dark:text-gray-300">
                       {question}
