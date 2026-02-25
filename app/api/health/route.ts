@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ensureBucket } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -65,14 +66,27 @@ export async function GET(req: NextRequest) {
     ? 'WARNING: Some variables may be incorrect'
     : 'OK';
 
+  // ── Storage bucket check ────────────────────────────────────────────────────
+  let storageStatus: { ok: boolean; bucket: string; message: string } | null = null;
+  try {
+    storageStatus = await ensureBucket();
+  } catch (err) {
+    storageStatus = { ok: false, bucket: 'unknown', message: String(err) };
+  }
+
+  if (storageStatus && !storageStatus.ok) {
+    missingVars.push(`Storage bucket: ${storageStatus.message}`);
+  }
+
   return NextResponse.json({
     status,
-    message: missingVars.length > 0 
-      ? `Missing: ${missingVars.join(', ')}` 
+    message: missingVars.length > 0
+      ? `Missing: ${missingVars.join(', ')}`
       : incorrectVars.length > 0
       ? `Issues: ${incorrectVars.join(', ')}`
       : 'All critical environment variables are set correctly.',
     environment_variables: envVars,
+    storage: storageStatus,
     issues: {
       missing: missingVars,
       incorrect: incorrectVars,

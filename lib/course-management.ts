@@ -250,26 +250,44 @@ export async function removeFileFromCourse(courseId: string, fileId: string): Pr
     .eq('file_id', fileId);
 }
 
-// ── Selected Course (stays in localStorage — it's just a UI state) ────────────
-export function getSelectedCourseId(): string | null {
+// ── Selected Course (stays in localStorage — scoped per user) ─────────────────
+function selectedCourseKey(userId?: string): string {
+  return userId
+    ? `${STORAGE_KEY_SELECTED_COURSE}-${userId}`
+    : STORAGE_KEY_SELECTED_COURSE;
+}
+
+export function getSelectedCourseId(userId?: string): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return localStorage.getItem(STORAGE_KEY_SELECTED_COURSE);
+    return localStorage.getItem(selectedCourseKey(userId));
   } catch {
     return null;
   }
 }
 
-export function setSelectedCourseId(courseId: string | null): void {
+export function setSelectedCourseId(courseId: string | null, userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
+    const key = selectedCourseKey(userId);
     if (courseId) {
-      localStorage.setItem(STORAGE_KEY_SELECTED_COURSE, courseId);
+      localStorage.setItem(key, courseId);
     } else {
-      localStorage.removeItem(STORAGE_KEY_SELECTED_COURSE);
+      localStorage.removeItem(key);
     }
     window.dispatchEvent(new Event('selected-course-change'));
   } catch (error) {
     console.error('[CourseManagement] Error saving selected course:', error);
+  }
+}
+
+export function clearSelectedCourseForUser(userId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(selectedCourseKey(userId));
+    // Also clear the legacy unscoped key in case it exists
+    localStorage.removeItem(STORAGE_KEY_SELECTED_COURSE);
+  } catch {
+    // ignore
   }
 }

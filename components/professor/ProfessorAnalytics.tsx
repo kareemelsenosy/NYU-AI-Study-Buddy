@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { X, FileDown, MessageSquareText, Users, Clock, Hash, Layers, TrendingUp, Calendar, BarChart3 } from 'lucide-react';
@@ -10,12 +11,46 @@ import { getCourseAnalytics, getMostAskedQuestions, getQuestionActivity, getPeak
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell, Area, AreaChart } from 'recharts';
 import { format } from 'date-fns';
 
+// ── Custom Tooltip ────────────────────────────────────────────────────────────
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name?: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl px-4 py-3 text-sm">
+      {label && <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{label}</p>}
+      {payload.map((entry, i) => (
+        <p key={i} className="text-[#57068C] dark:text-purple-300 font-medium">
+          {entry.name ? `${entry.name}: ` : ''}{entry.value}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// ── Loading Skeleton ──────────────────────────────────────────────────────────
+function AnalyticsSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-28 rounded-2xl bg-gray-100 dark:bg-gray-800" />
+        ))}
+      </div>
+      <div className="h-64 rounded-2xl bg-gray-100 dark:bg-gray-800" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="h-52 rounded-2xl bg-gray-100 dark:bg-gray-800" />
+        <div className="h-52 rounded-2xl bg-gray-100 dark:bg-gray-800" />
+      </div>
+    </div>
+  );
+}
+
 interface ProfessorAnalyticsProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps) {
+  const [loading, setLoading] = useState(false);
   const [analytics, setAnalytics] = useState<{ totalQuestions: number; uniqueStudents: number; activeDays: number; avgQuestionsPerDay: number } | null>(null);
   const [mostAskedQuestions, setMostAskedQuestions] = useState<Array<{ question: string; count: number }>>([]);
   const [questionActivity, setQuestionActivity] = useState<Array<{ date: string; count: number }>>([]);
@@ -28,6 +63,7 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
   const currentCourseId = selectedCourseForAnalytics || getSelectedCourseId();
 
   const loadAnalytics = useCallback(async () => {
+    setLoading(true);
     const { getCurrentUser } = await import('@/lib/user-auth');
     const user = getCurrentUser();
     const courses = user ? await getCoursesByProfessor(user.id) : [];
@@ -55,6 +91,7 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
       setPeakActivityHours([]);
       setTopTopics([]);
     }
+    setLoading(false);
   }, [currentCourseId]);
 
   useEffect(() => {
@@ -143,7 +180,13 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <Card className="relative w-full max-w-7xl max-h-[95vh] overflow-hidden bg-white dark:bg-gray-900 shadow-2xl rounded-2xl flex flex-col">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+        className="relative w-full max-w-7xl max-h-[95vh]"
+      >
+      <Card className="w-full max-h-[95vh] overflow-hidden bg-white dark:bg-gray-900 shadow-2xl rounded-2xl flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-6 flex items-center justify-between z-10">
           <div className="flex items-center gap-4">
@@ -189,7 +232,9 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {!currentCourseId ? (
+          {loading ? (
+            <AnalyticsSkeleton />
+          ) : !currentCourseId ? (
             <div className="text-center py-20">
               <BarChart3 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">No Course Selected</h3>
@@ -253,32 +298,31 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
                     <AreaChart data={questionActivity}>
                       <defs>
                         <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#57068C" stopOpacity={0.3}/>
+                          <stop offset="5%" stopColor="#57068C" stopOpacity={0.25}/>
                           <stop offset="95%" stopColor="#57068C" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
-                      <XAxis 
-                        dataKey="date" 
+                      <XAxis
+                        dataKey="date"
                         tickFormatter={(dateStr) => format(new Date(dateStr), 'MMM d')}
                         stroke="hsl(var(--muted-foreground))"
+                        tick={{ fontSize: 12 }}
                       />
-                      <YAxis allowDecimals={false} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'hsl(var(--card))', 
-                          borderColor: 'hsl(var(--border))',
-                          borderRadius: '8px'
-                        }}
+                      <YAxis allowDecimals={false} stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        content={<CustomTooltip />}
                         labelFormatter={(dateStr) => format(new Date(dateStr), 'MMMM d, yyyy')}
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey="count" 
-                        stroke="#57068C" 
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        name="Questions"
+                        stroke="#57068C"
                         strokeWidth={2}
                         fillOpacity={1}
                         fill="url(#colorCount)"
+                        animationDuration={800}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -296,21 +340,18 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={peakActivityHours}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
-                        <XAxis 
-                          dataKey="hour" 
+                        <XAxis
+                          dataKey="hour"
                           tickFormatter={(hour) => `${hour}:00`}
                           stroke="hsl(var(--muted-foreground))"
+                          tick={{ fontSize: 12 }}
                         />
-                        <YAxis allowDecimals={false} stroke="hsl(var(--muted-foreground))" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            borderColor: 'hsl(var(--border))',
-                            borderRadius: '8px'
-                          }}
-                          labelFormatter={(hour) => `${hour}:00 - ${hour}:59`}
+                        <YAxis allowDecimals={false} stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                        <Tooltip
+                          content={<CustomTooltip />}
+                          labelFormatter={(hour) => `${hour}:00 – ${hour}:59`}
                         />
-                        <Bar dataKey="count" fill="#57068C" radius={[8, 8, 0, 0]} />
+                        <Bar dataKey="count" name="Questions" fill="#57068C" radius={[8, 8, 0, 0]} animationDuration={800} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -416,6 +457,7 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
           )}
         </div>
       </Card>
+      </motion.div>
     </div>
   );
 }

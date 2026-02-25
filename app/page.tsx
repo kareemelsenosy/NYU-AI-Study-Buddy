@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
@@ -19,10 +20,11 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { HelpContent } from '@/components/HelpContent';
 import { getCurrentUser } from '@/lib/user-auth';
 import { User, UserRole } from '@/types';
-import { getUserRole, setUserRole as saveUserRole, getSelectedCourseId } from '@/lib/course-management';
+import { getUserRole, setUserRole as saveUserRole, getSelectedCourseId, setSelectedCourseId as saveSelectedCourseId } from '@/lib/course-management';
 import { CourseSelector } from '@/components/CourseSelector';
 import { CourseManager } from '@/components/CourseManager';
 import { ProfessorAnalytics } from '@/components/professor/ProfessorAnalytics';
+import { ProfessorTools } from '@/components/professor/ProfessorTools';
 
 export default function Home() {
   const [showFileManager, setShowFileManager] = useState(false);
@@ -44,8 +46,9 @@ export default function Home() {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   
-  // Professor analytics
+  // Professor analytics / tools
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showProfessorTools, setShowProfessorTools] = useState(false);
 
   // Pending example question (replaces window 'example-question' event)
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
@@ -67,11 +70,11 @@ export default function Home() {
       });
     }
     
-    // Check for role
+    // Check for role and restore scoped course selection
     const role = getUserRole();
     if (role) {
       setUserRole(role);
-      const courseId = getSelectedCourseId();
+      const courseId = getSelectedCourseId(currentUser?.id);
       setSelectedCourseId(courseId);
     }
 
@@ -128,12 +131,22 @@ export default function Home() {
   };
 
   const handleGoToChat = () => {
+    if (!user) { setShowAuthModal(true); return; }
     setShowFileManager(false);
     setShowHelp(false);
     setShowWelcome(false);
     setShowAnalytics(false);
+    setShowProfessorTools(false);
     // Don't create a session - just go to chat view
     // Session will be created when user sends first message
+  };
+
+  const handleProfessorToolsClick = () => {
+    setShowProfessorTools(true);
+    setShowWelcome(false);
+    setShowFileManager(false);
+    setShowHelp(false);
+    setShowAnalytics(false);
   };
   
   const handleOpenAnalytics = () => {
@@ -199,6 +212,8 @@ export default function Home() {
     setShowFileManager(false);
     setShowHelp(false);
     setShowWelcome(true);
+    setShowProfessorTools(false);
+    setShowAnalytics(false);
   };
 
   const handleCloseModal = () => {
@@ -223,9 +238,14 @@ export default function Home() {
   };
 
   const handleSignOut = () => {
+    // Clear the user-scoped course selection before wiping auth state
+    saveSelectedCourseId(null, user?.id);
     setUser(null);
     saveUserRole(null);
     setUserRole(null);
+    setSelectedCourseId(null);
+    setShowProfessorTools(false);
+    setShowWelcome(true);
   };
 
   // open-auth-modal is now handled via onOpenAuthModal prop on ChatInterface (no window event)
@@ -249,13 +269,14 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <Header 
+      <Header
         onFileManagerClick={handleGoToUpload}
         onHelpClick={() => setShowHelp(true)}
         onChatClick={handleGoToChat}
         onHomeClick={handleGoToHome}
         onSettingsClick={() => setShowSettingsModal(true)}
         onModelChange={handleModelChange}
+        onProfessorToolsClick={handleProfessorToolsClick}
         user={user}
         userRole={userRole}
         onSignInClick={() => setShowAuthModal(true)}
@@ -295,14 +316,21 @@ export default function Home() {
 
         {/* Help Modal */}
         {showHelp && (
-          <div 
+          <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={handleCloseModal}
           >
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <Card 
-              className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden bg-white dark:bg-gray-900 shadow-2xl border-0 rounded-2xl"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-2xl"
               onClick={(e) => e.stopPropagation()}
+            >
+            <Card
+              className="w-full max-h-[85vh] overflow-hidden bg-white dark:bg-gray-900 shadow-2xl border-0 rounded-2xl"
             >
               <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-5 flex items-center justify-between z-10">
                 <div>
@@ -352,13 +380,20 @@ export default function Home() {
                 />
               </div>
             </Card>
+            </motion.div>
           </div>
         )}
 
         {/* File Manager Modal - For Professors */}
         {showFileManager && userRole === 'professor' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <Card className="w-full max-w-5xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-900 shadow-2xl">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-5xl max-h-[90vh] overflow-auto"
+            >
+            <Card className="w-full bg-white dark:bg-gray-900 shadow-2xl">
               <div className="sticky top-0 bg-white dark:bg-gray-900 border-b p-6 flex items-center justify-between z-10">
                 <div>
                   <h2 className="text-3xl font-bold text-[#57068C] dark:text-purple-400">
@@ -399,28 +434,45 @@ export default function Home() {
                     }}
                   />
                 </div>
-                {/* File List for Selected Course */}
-                <div className="border-t pt-6">
-                  <FileList
-                    courseId={selectedCourseId || undefined}
-                    onGoToChat={() => {
-                      setShowFileManager(false);
-                      handleGoToChat();
-                    }}
-                    onFilesChange={() => {
-                      setHasFiles(true);
-                    }}
-                  />
-                </div>
+                {/* File List — only shown after a course is selected (course-first UX) */}
+                {selectedCourseId ? (
+                  <div className="border-t pt-6">
+                    <FileList
+                      courseId={selectedCourseId}
+                      onGoToChat={() => {
+                        setShowFileManager(false);
+                        handleGoToChat();
+                      }}
+                      onFilesChange={() => {
+                        setHasFiles(true);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="border-t pt-6">
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Upload className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">Select a course above to upload files</p>
+                      <p className="text-xs mt-1">Create a course first if you haven&apos;t already</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
+            </motion.div>
           </div>
         )}
 
         {/* Course Selection Modal - For Students */}
         {showFileManager && userRole === 'student' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-900 shadow-2xl">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-2xl"
+            >
+            <Card className="w-full max-h-[90vh] overflow-auto bg-white dark:bg-gray-900 shadow-2xl">
               <div className="sticky top-0 bg-white dark:bg-gray-900 border-b p-6 flex items-center justify-between z-10">
                 <div>
                   <h2 className="text-3xl font-bold text-[#57068C] dark:text-purple-400">
@@ -444,6 +496,7 @@ export default function Home() {
                 <CourseSelector onCourseSelected={handleCourseSelected} />
               </div>
             </Card>
+            </motion.div>
           </div>
         )}
 
@@ -455,9 +508,28 @@ export default function Home() {
           />
         )}
 
-        {/* Main Content */}
-        {showWelcome && !showHelp && !showFileManager && !showAnalytics ? (
-          <div className="h-full overflow-auto">
+        {/* Main Content — three mutually-exclusive views, animated */}
+        <AnimatePresence mode="wait" initial={false}>
+        {showProfessorTools && userRole === 'professor' ? (
+          <motion.div
+            key="professor-tools"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="h-full overflow-auto p-6"
+          >
+            <ProfessorTools />
+          </motion.div>
+        ) : showWelcome && !showHelp && !showFileManager && !showAnalytics ? (
+          <motion.div
+            key="welcome"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="h-full overflow-auto"
+          >
             <div className="min-h-full flex items-center justify-center py-12">
               <WelcomeSection
                 user={user}
@@ -487,9 +559,17 @@ export default function Home() {
                 }}
               />
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <div className="h-full flex" style={{ height: '100%', minHeight: 0 }}>
+          <motion.div
+            key="chat"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="h-full flex"
+            style={{ height: '100%', minHeight: 0 }}
+          >
             {/* Chat Sidebar */}
             {showChatSidebar && (
               <div className="hidden md:block">
@@ -579,8 +659,9 @@ export default function Home() {
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </main>
     </div>
   );

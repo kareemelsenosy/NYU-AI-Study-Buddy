@@ -35,7 +35,7 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
 
   useEffect(() => {
     loadCourses();
-    const currentSelected = getSelectedCourseId();
+    const currentSelected = getSelectedCourseId(getCurrentUser()?.id);
     setSelectedCourseIdState(currentSelected);
 
     // Listen for course changes
@@ -83,7 +83,7 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
     setFormData({ name: '', description: '' });
     setShowCreateForm(false);
     // Select the newly created course
-    setSelectedCourseId(course.id);
+    setSelectedCourseId(course.id, user.id);
     setSelectedCourseIdState(course.id);
     onCourseCreated?.(course.id);
     onCourseSelected?.(course.id);
@@ -205,7 +205,7 @@ export function CourseManager({ onCourseCreated, onCourseSelected }: CourseManag
                   : 'border-gray-200 dark:border-gray-800 hover:border-purple-300 dark:hover:border-purple-700'
               }`}
               onClick={() => {
-                setSelectedCourseId(course.id);
+                setSelectedCourseId(course.id, getCurrentUser()?.id);
                 setSelectedCourseIdState(course.id);
                 onCourseSelected?.(course.id);
               }}

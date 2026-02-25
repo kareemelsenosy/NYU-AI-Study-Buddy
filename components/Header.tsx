@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { Moon, Sun, HelpCircle, MessageSquare, Upload, Settings, Sparkles, BookOpen } from 'lucide-react';
+import { Moon, Sun, HelpCircle, MessageSquare, Upload, Settings, Sparkles, BookOpen, Zap } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { ModelSelector } from './ModelSelector';
@@ -15,6 +15,7 @@ interface HeaderProps {
   onHomeClick?: () => void;
   onSettingsClick?: () => void;
   onModelChange?: (modelId: string) => void;
+  onProfessorToolsClick?: () => void;
   user?: User | null;
   userRole?: UserRole | null;
   onSignInClick?: () => void;
@@ -22,13 +23,14 @@ interface HeaderProps {
   onSignOut?: () => void;
 }
 
-export function Header({ 
-  onFileManagerClick, 
-  onHelpClick, 
-  onChatClick, 
-  onHomeClick, 
+export function Header({
+  onFileManagerClick,
+  onHelpClick,
+  onChatClick,
+  onHomeClick,
   onSettingsClick,
   onModelChange,
+  onProfessorToolsClick,
   user,
   userRole,
   onSignInClick,
@@ -67,45 +69,51 @@ export function Header({
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-1 ml-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onChatClick}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Chat
-            </Button>
-            {isStudent ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onFileManagerClick}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
-              >
-                <BookOpen className="h-4 w-4 mr-2" />
-                Select Course
-              </Button>
-            ) : isProfessor ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onFileManagerClick}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Materials
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onFileManagerClick}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload
-              </Button>
+            {user && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onChatClick}
+                  className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Chat
+                </Button>
+                {isStudent && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onFileManagerClick}
+                    className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Select Course
+                  </Button>
+                )}
+                {isProfessor && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onFileManagerClick}
+                      className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Materials
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onProfessorToolsClick}
+                      className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                    >
+                      <Zap className="h-4 w-4 mr-2" />
+                      Professor Tools
+                    </Button>
+                  </>
+                )}
+              </>
             )}
             <Button
               variant="ghost"

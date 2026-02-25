@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Course } from '@/types';
 import { getVisibleCourses, setSelectedCourseId, getSelectedCourseId } from '@/lib/course-management';
+import { getCurrentUser } from '@/lib/user-auth';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { BookOpen, Check } from 'lucide-react';
@@ -18,7 +19,7 @@ export function CourseSelector({ onCourseSelected }: CourseSelectorProps) {
 
   useEffect(() => {
     loadCourses();
-    const currentSelected = getSelectedCourseId();
+    const currentSelected = getSelectedCourseId(getCurrentUser()?.id);
     setSelectedCourseIdState(currentSelected);
     
     // Listen for course changes
@@ -33,7 +34,7 @@ export function CourseSelector({ onCourseSelected }: CourseSelectorProps) {
   };
 
   const handleSelectCourse = (courseId: string) => {
-    setSelectedCourseId(courseId);
+    setSelectedCourseId(courseId, getCurrentUser()?.id);
     setSelectedCourseIdState(courseId);
     onCourseSelected?.(courseId);
   };

@@ -5,8 +5,10 @@ import { isValidFileType, formatFileSize } from '@/lib/utils';
 import { UploadResponse } from '@/types';
 import { createServerClient } from '@/lib/supabase';
 
-const MAX_FILES = 10;
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+// No per-request file count limit — users can upload any number of files.
+// A hard ceiling of 100 is kept only to prevent accidental abuse; raise or remove as needed.
+const MAX_FILES = 100;
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
@@ -94,12 +96,12 @@ export async function POST(req: NextRequest) {
 
     if (files.length > MAX_FILES) {
       const duration = Date.now() - startTime;
-      console.error(`[UPLOAD:${requestId}] ❌ Error: Too many files (${files.length} > ${MAX_FILES}) (${duration}ms)`);
+      console.error(`[UPLOAD:${requestId}] ❌ Error: Batch too large (${files.length} files, max ${MAX_FILES}) (${duration}ms)`);
       console.log(`[UPLOAD:${requestId}] ⬆️  RESPONSE: 400 Bad Request\n`);
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Maximum ${MAX_FILES} files allowed at once`,
+          error: `Too many files in one batch (${files.length}). Split into batches of ${MAX_FILES} or fewer.`,
         } as UploadResponse),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );

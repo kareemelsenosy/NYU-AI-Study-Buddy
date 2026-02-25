@@ -1,7 +1,8 @@
 import { createServerClient } from '@/lib/supabase';
 import { FileMetadata } from '@/types';
 
-const BUCKET = 'course-files';
+// Bucket name — override via SUPABASE_STORAGE_BUCKET env var if needed
+const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'course-files';
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 const CONTENT_TYPE_MAP: Record<string, string> = {
@@ -12,11 +13,72 @@ const CONTENT_TYPE_MAP: Record<string, string> = {
   txt: 'text/plain',
 };
 
+// ── Bucket health check ───────────────────────────────────────────────────────
+// Cached flag so we only verify/create once per server process lifetime.
+let bucketReady = false;
+
+export async function ensureBucket(): Promise<{ ok: boolean; bucket: string; message: string }> {
+  if (bucketReady) return { ok: true, bucket: BUCKET, message: 'Bucket ready (cached)' };
+
+  const supabase = createServerClient();
+
+  // Try to get the bucket metadata
+  const { data: existing, error: getError } = await supabase.storage.getBucket(BUCKET);
+
+  if (existing) {
+    console.log(`[STORAGE] ✅ Bucket '${BUCKET}' exists and is accessible`);
+    bucketReady = true;
+    return { ok: true, bucket: BUCKET, message: `Bucket '${BUCKET}' exists` };
+  }
+
+  // If the error is anything other than "not found", it's a credentials/config issue
+  const isNotFound =
+    getError?.message?.toLowerCase().includes('not found') ||
+    getError?.message?.toLowerCase().includes('does not exist') ||
+    getError?.message?.toLowerCase().includes('nosuchbucket');
+
+  if (!isNotFound) {
+    const msg = `Storage configuration error: ${getError?.message}. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.`;
+    console.error(`[STORAGE] ❌ ${msg}`);
+    return { ok: false, bucket: BUCKET, message: msg };
+  }
+
+  // Bucket doesn't exist — create it with public access so getPublicUrl works
+  console.log(`[STORAGE] 🪣 Bucket '${BUCKET}' not found — creating...`);
+  const { error: createError } = await supabase.storage.createBucket(BUCKET, {
+    public: true,
+    allowedMimeTypes: [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain',
+    ],
+    fileSizeLimit: MAX_FILE_SIZE,
+  });
+
+  if (createError) {
+    const msg = `Failed to create bucket '${BUCKET}': ${createError.message}. Create it manually in the Supabase dashboard under Storage.`;
+    console.error(`[STORAGE] ❌ ${msg}`);
+    return { ok: false, bucket: BUCKET, message: msg };
+  }
+
+  console.log(`[STORAGE] ✅ Bucket '${BUCKET}' created successfully`);
+  bucketReady = true;
+  return { ok: true, bucket: BUCKET, message: `Bucket '${BUCKET}' created` };
+}
+
 export async function uploadFile(file: File): Promise<FileMetadata> {
   console.log(`[STORAGE] Uploading file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
 
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+  }
+
+  // Verify bucket exists (auto-creates if missing; cached after first call)
+  const health = await ensureBucket();
+  if (!health.ok) {
+    throw new Error(`Storage unavailable: ${health.message}`);
   }
 
   const supabase = createServerClient();
@@ -35,6 +97,8 @@ export async function uploadFile(file: File): Promise<FileMetadata> {
     });
 
   if (error) {
+    // Reset cache so next upload re-checks bucket health
+    bucketReady = false;
     console.error(`[STORAGE] Upload error for ${file.name}:`, error.message);
     throw new Error(`Storage upload error: ${error.message}`);
   }

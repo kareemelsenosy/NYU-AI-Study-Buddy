@@ -194,7 +194,15 @@ export async function signIn(
 // ── Sign Out ──────────────────────────────────────────────────────────────────
 export function signOut(): void {
   if (typeof window === 'undefined') return;
+  // Read userId before clearing session so we can clear the scoped course key
+  const user = getCurrentUser();
   localStorage.removeItem(SESSION_KEY);
+  // Clear role and selected-course state (both scoped and legacy unscoped)
+  localStorage.removeItem('nyu-study-buddy-user-role');
+  if (user?.id) {
+    localStorage.removeItem(`nyu-study-buddy-selected-course-${user.id}`);
+  }
+  localStorage.removeItem('nyu-study-buddy-selected-course');
 }
 
 // ── Update Preferences ────────────────────────────────────────────────────────
