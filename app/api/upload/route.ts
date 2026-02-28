@@ -146,10 +146,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upload files
+    // Upload files — scoped to professor/course folder for isolation
     console.log(`[UPLOAD:${requestId}] 🚀 Starting file upload to Supabase Storage...${courseId ? ` (course: ${courseId})` : ''}`);
     const uploadStart = Date.now();
-    const uploadedFiles = await uploadFiles(files);
+    const uploadedFiles = await uploadFiles(files, userId!, courseId!);
     const uploadDuration = Date.now() - uploadStart;
     
     console.log(`[UPLOAD:${requestId}] ✅ Successfully uploaded ${uploadedFiles.length} file(s) in ${uploadDuration}ms`);

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listFiles } from '@/lib/storage';
-import { extractTextFromFile } from '@/lib/file-extractors';
 import { callPortkeyDirectly } from '@/lib/portkey';
+import { createServerClient } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -9,62 +8,58 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { topic, numQuestions = 10, difficulty = 'medium', courseId, model } = body;
+    const { topic, numQuestions = 10, difficulty = 'medium', courseId, courseName, selectedFileIds, model } = body;
 
-    if (!topic || !courseId) {
-      return NextResponse.json(
-        { error: 'Topic and courseId are required' },
-        { status: 400 }
-      );
+    if (!courseId) {
+      return NextResponse.json({ error: 'courseId is required' }, { status: 400 });
     }
 
-    // Get course files from request (client sends fileIds)
-    const { fileIds = [] } = body;
-    
-    if (fileIds.length === 0) {
-      return NextResponse.json(
-        { error: 'No materials found for this course' },
-        { status: 400 }
-      );
+    const supabase = createServerClient();
+
+    // Fetch relevant chunks from document_chunks using RAG approach
+    // If selectedFileIds provided, filter to only those files; otherwise use all course chunks
+    let chunksQuery = supabase
+      .from('document_chunks')
+      .select('file_name, chunk_index, content')
+      .eq('course_id', courseId)
+      .order('file_name')
+      .order('chunk_index')
+      .limit(60);
+
+    if (selectedFileIds && selectedFileIds.length > 0) {
+      chunksQuery = chunksQuery.in('file_id', selectedFileIds);
     }
 
-    // Load course materials
-    const allFiles = await listFiles();
-    const files = allFiles.filter(f => fileIds.includes(f.id));
+    const { data: chunks, error } = await chunksQuery;
 
-    let courseMaterials = '';
-    for (const file of files.slice(0, 5)) { // Limit to 5 files for context
-      try {
-        const response = await fetch(file.url, { signal: AbortSignal.timeout(30000) });
-        if (response.ok) {
-          const buffer = Buffer.from(await response.arrayBuffer());
-          const extracted = await extractTextFromFile(file.name, buffer);
-          if (extracted.text && !extracted.error) {
-            courseMaterials += `\n\n=== ${file.name} ===\n${extracted.text.substring(0, 5000)}`;
-          }
-        }
-      } catch (error) {
-        console.error(`Error loading file ${file.name}:`, error);
-      }
+    if (error) {
+      console.error('Error fetching chunks:', error);
+      return NextResponse.json({ error: 'Failed to load course materials' }, { status: 500 });
     }
 
-    // Generate quiz using AI
-    const systemPrompt = `You are an expert quiz generator for academic courses. Generate high-quality multiple-choice questions based on course materials.
+    if (!chunks || chunks.length === 0) {
+      return NextResponse.json({ error: 'No course materials found. Please upload materials first.' }, { status: 400 });
+    }
 
-Guidelines:
-- Create questions that test understanding, not just memorization
-- Make questions relevant to the specified topic
-- Include 4 options per question (A, B, C, D)
-- Mark the correct answer clearly
-- Provide brief explanations for correct answers
-- Vary question difficulty based on the specified level
-- Ensure questions are clear and unambiguous
-- Base questions ONLY on the provided course materials`;
+    // Build context from chunks
+    const context = chunks
+      .map((c: { file_name: string; chunk_index: number; content: string }) =>
+        `[${c.file_name}, section ${c.chunk_index + 1}]\n${c.content}`
+      )
+      .join('\n\n---\n\n');
 
-    const userPrompt = `Generate a quiz with ${numQuestions} ${difficulty} multiple-choice questions on the topic: "${topic}"
+    const topicClause = topic?.trim()
+      ? `Focus specifically on the topic: "${topic.trim()}". Only generate questions about this topic if it appears in the materials.`
+      : 'Generate questions that cover the breadth of the materials provided.';
 
-Course Materials:
-${courseMaterials || 'No specific materials provided - use general knowledge of the topic'}
+    const userPrompt = `Generate a quiz with ${numQuestions} ${difficulty}-difficulty multiple-choice questions for the course "${courseName}".
+
+${topicClause}
+
+COURSE MATERIALS:
+${context}
+
+CRITICAL: Base every question STRICTLY on the course materials above. Do not use external knowledge.
 
 Format your response as JSON:
 {
@@ -74,42 +69,36 @@ Format your response as JSON:
       "question": "Question text",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswer": 0,
-      "explanation": "Brief explanation"
+      "explanation": "Brief explanation citing the source section"
     }
   ]
 }`;
 
     const messages = [
-      { role: 'system', content: systemPrompt },
+      {
+        role: 'system',
+        content: 'You are an expert academic quiz generator. Always respond with valid JSON only, no markdown fences. Base questions strictly on provided materials.',
+      },
       { role: 'user', content: userPrompt },
     ];
 
     const response = await callPortkeyDirectly(messages, model || '@gpt-4o/gpt-4o', false);
     const data = await response.json();
+    const content2 = data.choices?.[0]?.message?.content || '';
 
     let quizData;
     try {
-      const content = data.choices[0]?.message?.content || '';
-      // Try to extract JSON from the response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        quizData = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No valid JSON found in response');
-      }
-    } catch (error) {
-      console.error('Error parsing quiz response:', error);
-      return NextResponse.json(
-        { error: 'Failed to parse quiz response' },
-        { status: 500 }
-      );
+      const jsonMatch = content2.match(/\{[\s\S]*\}/);
+      quizData = JSON.parse(jsonMatch ? jsonMatch[0] : content2);
+    } catch {
+      return NextResponse.json({ error: 'Failed to parse quiz response' }, { status: 500 });
     }
 
     const quiz = {
-      title: quizData.title || `Quiz: ${topic}`,
+      title: quizData.title || (topic ? `Quiz: ${topic}` : `${courseName} Quiz`),
       questions: quizData.questions || [],
       courseId,
-      courseName: body.courseName || 'Course',
+      courseName: courseName || 'Course',
       createdAt: new Date(),
     };
 
@@ -122,4 +111,3 @@ Format your response as JSON:
     );
   }
 }
-

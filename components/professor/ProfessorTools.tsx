@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
 import { getSelectedCourseId, getCoursesByProfessor, getCourse } from '@/lib/course-management';
+import { getCurrentUser } from '@/lib/user-auth';
 import { getSelectedModel } from '@/lib/models';
 import {
   getMostAskedQuestions,
@@ -46,15 +47,29 @@ export function ProfessorTools() {
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuiz | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [courseFiles, setCourseFiles] = useState<import('@/types').CourseFile[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);  // empty = all files
   const [analyticsData, setAnalyticsData] = useState<any>(null);
 
-  const courseId = selectedCourseId || getSelectedCourseId();
+  const courseId = selectedCourseId || getSelectedCourseId(getCurrentUser()?.id);
   const model = getSelectedModel();
   const [courses, setCourses] = useState<import('@/types').Course[]>([]);
   const [allCourseStats, setAllCourseStats] = useState<import('@/lib/analytics').EngagementStats[]>([]);
 
   useEffect(() => {
     loadAnalytics();
+    // Load files for quiz chapter selector
+    if (courseId) {
+      import('@/lib/course-management').then(({ getCourseFiles }) => {
+        getCourseFiles(courseId).then(files => {
+          setCourseFiles(files);
+          setSelectedFileIds([]); // reset to "all" when course changes
+        });
+      });
+    } else {
+      setCourseFiles([]);
+      setSelectedFileIds([]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
@@ -109,20 +124,9 @@ export function ProfessorTools() {
       return;
     }
 
-    if (!quizTopic.trim()) {
-      toast({
-        title: 'Topic Required',
-        description: 'Please enter a topic for the quiz',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setGenerating(true);
     try {
       const course = courseId ? await getCourse(courseId) : null;
-      const courseFiles = courseId ? await (await import('@/lib/course-management')).getCourseFiles(courseId) : [];
-      const fileIds = courseFiles.map(cf => cf.fileId);
 
       const response = await fetch('/api/generate-quiz', {
         method: 'POST',
@@ -135,7 +139,8 @@ export function ProfessorTools() {
           difficulty,
           courseId,
           courseName: course?.name || 'Course',
-          fileIds,
+          // empty array = all materials; non-empty = specific chapters
+          selectedFileIds: selectedFileIds.length > 0 ? selectedFileIds : undefined,
           model,
         }),
       });
@@ -548,9 +553,49 @@ ${analyticsData.peakHours.filter((h: any) => h.count > 0).map((h: any) => `${h.h
             </div>
 
             <div className="space-y-4">
+              {/* Chapter / File Selector */}
+              {courseFiles.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Materials to Include
+                  </label>
+                  <div className="space-y-2 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedFileIds.length === 0}
+                        onChange={() => setSelectedFileIds([])}
+                        className="w-4 h-4 accent-[#57068C]"
+                      />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">All uploaded materials</span>
+                    </label>
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-2 space-y-1">
+                      {courseFiles.map(f => (
+                        <label key={f.fileId} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedFileIds.includes(f.fileId)}
+                            onChange={(e) => {
+                              setSelectedFileIds(prev =>
+                                e.target.checked ? [...prev, f.fileId] : prev.filter(id => id !== f.fileId)
+                              );
+                            }}
+                            className="w-4 h-4 accent-[#57068C]"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{f.fileName}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {selectedFileIds.length > 0 && (
+                    <p className="text-xs text-[#57068C] mt-1">{selectedFileIds.length} file(s) selected</p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Quiz Topic
+                  Focus Topic <span className="font-normal text-muted-foreground">(optional — leave blank to cover all materials)</span>
                 </label>
                 <Input
                   value={quizTopic}
@@ -593,7 +638,7 @@ ${analyticsData.peakHours.filter((h: any) => h.count > 0).map((h: any) => `${h.h
 
               <Button
                 onClick={handleGenerateQuiz}
-                disabled={generating || !quizTopic.trim() || !courseId}
+                disabled={generating || !courseId}
                 className="w-full bg-[#57068C] hover:bg-[#6A0BA8] text-white h-12"
               >
                 {generating ? (

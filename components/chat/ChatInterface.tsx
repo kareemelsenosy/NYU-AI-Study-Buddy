@@ -134,8 +134,8 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
         }
       }
       
-      // Get course file IDs if a course is selected
-      const courseId = getSelectedCourseId();
+      // Get course file IDs if a course is selected (user-scoped key)
+      const courseId = getSelectedCourseId(user?.id);
       const courseFileList = courseId ? await getCourseFiles(courseId) : [];
       const fileIds = courseFileList.length > 0 ? courseFileList.map(cf => cf.fileId) : undefined;
 
@@ -389,7 +389,7 @@ export function ChatInterface({ sessionId, onSessionChange, selectedModel, onMod
     }, 2000); // Debounce saves by 2 seconds to allow AI title generation
 
     return () => clearTimeout(timeoutId);
-  }, [messages, currentSessionId]);
+  }, [messages, currentSessionId, user?.id, courseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-gradient-to-b from-gray-50/50 to-white dark:from-gray-950 dark:to-gray-900" style={{ height: '100%' }}>

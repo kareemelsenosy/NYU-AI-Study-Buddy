@@ -30,18 +30,21 @@ export function FileList({ onFilesChange, courseId, onGoToChat }: FileListProps)
     try {
       setLoading(true);
       console.log('[FileList] Loading files...', courseId ? `(course: ${courseId})` : '');
-      
-      // Get file IDs for the course if courseId is provided
-      let url = '/api/files';
-      if (courseId) {
-        const { getCourseFiles } = await import('@/lib/course-management');
-        const courseFiles = await getCourseFiles(courseId);
-        const fileIds = courseFiles.map(cf => cf.fileId);
-        if (fileIds.length > 0) {
-          url = `/api/files?fileIds=${fileIds.join(',')}`;
-        }
+
+      if (!courseId) {
+        setFiles([]);
+        return;
       }
-      
+
+      const { getCurrentUser } = await import('@/lib/user-auth');
+      const userId = getCurrentUser()?.id;
+      if (!userId) {
+        setFiles([]);
+        return;
+      }
+
+      // Scoped by courseId + userId — server enforces professor ownership
+      const url = `/api/files?courseId=${encodeURIComponent(courseId)}&userId=${encodeURIComponent(userId)}`;
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -96,12 +99,15 @@ export function FileList({ onFilesChange, courseId, onGoToChat }: FileListProps)
     
     try {
       console.log('[FileList] Deleting file:', { fileId, fileUrl });
-      
-      // Also pass the URL if available (for more reliable deletion)
-      const params = new URLSearchParams({ id: fileId });
-      if (fileUrl) {
-        params.append('url', fileUrl);
+
+      const { getCurrentUser } = await import('@/lib/user-auth');
+      const userId = getCurrentUser()?.id;
+      if (!userId) {
+        toast({ title: 'Error', description: 'Not authenticated', variant: 'destructive' });
+        return;
       }
+
+      const params = new URLSearchParams({ id: fileId, userId });
       const response = await fetch(`/api/files?${params.toString()}`, {
         method: 'DELETE',
       });

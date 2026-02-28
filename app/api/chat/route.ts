@@ -1,245 +1,30 @@
 import { NextRequest } from 'next/server';
 import { getPortkeyClient, SYSTEM_PROMPT, AI_MODEL } from '@/lib/portkey';
-import { listFiles } from '@/lib/storage';
-import { extractTextFromFile } from '@/lib/file-extractors';
 import { embedText } from '@/lib/embeddings';
 import { createServerClient } from '@/lib/supabase';
 import { trackQuestion } from '@/lib/analytics';
 import { ChatRequest, Message } from '@/types';
 
-const MAX_CONTEXT_LENGTH = 200000;
-const RAG_CHUNK_COUNT = 8; // top-K chunks to retrieve
+const RAG_CHUNK_COUNT = 15;       // number of candidate chunks to fetch
 
-async function loadCourseMaterials(fileIds?: string[]): Promise<{ text: string; fileCount: number; fileNames: string[] }> {
-  console.log('[MATERIALS] Loading course materials...', fileIds ? `(${fileIds.length} specific files)` : '(all files)');
-  const startTime = Date.now();
-  
-  try {
-    let files = await listFiles();
-    console.log(`[MATERIALS] Found ${files.length} files in storage`);
-    
-    // Filter files by fileIds if provided
-    if (fileIds && fileIds.length > 0) {
-      files = files.filter(f => fileIds.includes(f.id));
-      console.log(`[MATERIALS] Filtered to ${files.length} file(s) for course`);
-    }
-    
-    if (files.length === 0) {
-      console.log('[MATERIALS] No files found, returning empty message');
-      return { text: 'No course materials uploaded yet.', fileCount: 0, fileNames: [] };
-    }
+// ── RAG: semantic retrieval via pgvector ─────────────────────────────────────
+type RagStatus = 'ok' | 'no_embeddings' | 'no_match' | 'error';
 
-    const materialTexts: string[] = [];
-    const successfulFiles: string[] = [];
-    const failedFiles: string[] = [];
-
-    // Process ALL files - no limit
-    console.log(`[MATERIALS] Processing ALL ${files.length} files...`);
-    
-    const extractionPromises = files.map(async (file, index) => {
-      try {
-        console.log(`[MATERIALS] Processing file ${index + 1}/${files.length}: ${file.name}`);
-        const fetchStart = Date.now();
-        
-        const response = await fetch(file.url, { 
-          signal: AbortSignal.timeout(45000) // Increased timeout
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
-        }
-        
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const fetchDuration = Date.now() - fetchStart;
-        console.log(`[MATERIALS] Fetched ${file.name} (${buffer.length} bytes) in ${fetchDuration}ms`);
-        
-        const extractStart = Date.now();
-        const extracted = await extractTextFromFile(file.name, buffer);
-        const extractDuration = Date.now() - extractStart;
-        
-        if (extracted.text && !extracted.error) {
-          console.log(`[MATERIALS] ✅ Extracted ${extracted.text.length} chars from ${file.name} in ${extractDuration}ms`);
-          successfulFiles.push(file.name);
-          return { name: file.name, text: extracted.text };
-        } else {
-          console.warn(`[MATERIALS] ⚠️ Extraction failed for ${file.name}:`, extracted.error);
-          failedFiles.push(file.name);
-          return null;
-        }
-      } catch (error) {
-        console.error(`[MATERIALS] ❌ Error processing file ${file.name}:`, error);
-        failedFiles.push(file.name);
-        return null;
-      }
-    });
-
-    const results = await Promise.all(extractionPromises);
-    
-    // Build the text with clear file separators
-    for (const result of results) {
-      if (result) {
-        materialTexts.push(`\n\n${'='.repeat(50)}\n=== FILE: ${result.name} ===\n${'='.repeat(50)}\n${result.text}`);
-      }
-    }
-    
-    const totalDuration = Date.now() - startTime;
-    const totalText = materialTexts.join('\n');
-    
-    console.log(`[MATERIALS] ========== SUMMARY ==========`);
-    console.log(`[MATERIALS] Total files found: ${files.length}`);
-    console.log(`[MATERIALS] Successfully processed: ${successfulFiles.length}`);
-    console.log(`[MATERIALS] Failed to process: ${failedFiles.length}`);
-    console.log(`[MATERIALS] Total text length: ${totalText.length} characters`);
-    console.log(`[MATERIALS] Processing time: ${totalDuration}ms`);
-    console.log(`[MATERIALS] Files included: ${successfulFiles.join(', ')}`);
-    if (failedFiles.length > 0) {
-      console.log(`[MATERIALS] Files failed: ${failedFiles.join(', ')}`);
-    }
-    console.log(`[MATERIALS] ================================`);
-
-    return { text: totalText, fileCount: successfulFiles.length, fileNames: successfulFiles };
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`[MATERIALS] Error loading course materials after ${duration}ms:`, error);
-    return { text: 'Error loading course materials.', fileCount: 0, fileNames: [] };
-  }
+interface RagResult {
+  text: string;
+  fileCount: number;
+  fileNames: string[];
+  chunkCount: number;
+  status: RagStatus;
 }
 
-function selectRelevantContent(question: string, fullContext: string, fileNames: string[], maxLength: number = MAX_CONTEXT_LENGTH): string {
-  // If content fits, return all of it
-  if (!fullContext || fullContext.length === 0) {
-    return fullContext;
-  }
-
-  // IMPORTANT: If content is within limit, include ALL of it
-  if (fullContext.length <= maxLength) {
-    console.log(`[CONTEXT] Content (${fullContext.length} chars) fits within limit (${maxLength}). Including ALL content.`);
-    return fullContext;
-  }
-
-  console.log(`[CONTEXT] Content (${fullContext.length} chars) exceeds limit (${maxLength}). Selecting most relevant sections...`);
-
-  const questionLower = question.toLowerCase();
-  const keywords = questionLower
-    .split(/\s+/)
-    .filter(k => k.length >= 2)
-    .map(k => k.replace(/[^\w]/g, ''))
-    .filter(k => k.length >= 2);
-  
-  // Check if question mentions specific files
-  const fileNamesInQuestion: string[] = [];
-  for (const fileName of fileNames) {
-    const fileNameLower = fileName.toLowerCase().replace(/[^\w]/g, '');
-    const fileNameWords = fileName.toLowerCase().split(/[\s_.-]+/);
-    
-    // Check if any part of filename is mentioned
-    for (const word of fileNameWords) {
-      if (word.length > 3 && questionLower.includes(word)) {
-        fileNamesInQuestion.push(fileName);
-        break;
-      }
-    }
-    
-    // Also check direct filename reference
-    if (questionLower.includes(fileNameLower)) {
-      if (!fileNamesInQuestion.includes(fileName)) {
-        fileNamesInQuestion.push(fileName);
-      }
-    }
-  }
-  
-  console.log(`[CONTEXT] Keywords: ${keywords.join(', ')}`);
-  console.log(`[CONTEXT] Files mentioned in question: ${fileNamesInQuestion.join(', ') || 'none'}`);
-
-  // Split into file sections
-  const sections = fullContext.split(/={50,}\n=== FILE: /);
-  const allSections: Array<{ score: number; text: string; filename: string; size: number }> = [];
-
-  for (let i = 0; i < sections.length; i++) {
-    const section = sections[i];
-    if (!section || section.trim().length === 0) continue;
-    
-    // Extract filename from section
-    const filenameMatch = section.match(/^([^\n=]+)/);
-    const filename = filenameMatch ? filenameMatch[1].trim().replace(' ===', '') : `Section ${i}`;
-    const filenameLower = filename.toLowerCase();
-    
-    const sectionLower = section.toLowerCase();
-    let relevanceScore = 0;
-    
-    // Highest priority: file explicitly mentioned in question
-    if (fileNamesInQuestion.some(f => f.toLowerCase() === filenameLower)) {
-      relevanceScore += 1000;
-      console.log(`[CONTEXT] +1000 for "${filename}" - explicitly mentioned`);
-    }
-    
-    // High priority: filename contains keywords
-    for (const keyword of keywords) {
-      if (filenameLower.includes(keyword)) {
-        relevanceScore += 50;
-      }
-    }
-    
-    // Medium priority: content contains keywords
-    for (const keyword of keywords) {
-      const count = (sectionLower.match(new RegExp(keyword, 'g')) || []).length;
-      relevanceScore += Math.min(count * 2, 30); // Cap at 30 per keyword
-    }
-    
-    // Small base score for all files to ensure some representation
-    relevanceScore += 1;
-    
-    allSections.push({ 
-      score: relevanceScore, 
-      text: i === 0 ? section : `${'='.repeat(50)}\n=== FILE: ${section}`,
-      filename, 
-      size: section.length 
-    });
-  }
-
-  // Sort by relevance
-  allSections.sort((a, b) => b.score - a.score);
-
-  console.log(`[CONTEXT] Section scores:`);
-  for (const s of allSections) {
-    console.log(`[CONTEXT]   - ${s.filename}: score=${s.score}, size=${s.size}`);
-  }
-
-  // Build result, prioritizing high-scoring sections
-  let result = '';
-  const includedFiles: string[] = [];
-  
-  for (const { text, filename, score } of allSections) {
-    if (result.length + text.length <= maxLength) {
-      result += text;
-      includedFiles.push(filename);
-    } else if (score >= 100) {
-      // Always try to include high-priority files even if truncated
-      const remaining = maxLength - result.length;
-      if (remaining > 1000) {
-        result += text.substring(0, remaining);
-        includedFiles.push(`${filename} (truncated)`);
-      }
-      break;
-    } else {
-      break;
-    }
-  }
-
-  console.log(`[CONTEXT] Final result: ${result.length} chars, files included: ${includedFiles.join(', ')}`);
-
-  if (result.length === 0) {
-    return fullContext.substring(0, maxLength);
-  }
-
-  return result;
-}
-
-// ── RAG: semantic retrieval via pgvector ──────────────────────────────────────
 async function loadCourseMaterialsRAG(
   question: string,
   courseId: string,
-): Promise<{ text: string; fileCount: number; fileNames: string[]; chunkCount: number } | null> {
+): Promise<RagResult> {
+  const empty = (status: RagStatus): RagResult =>
+    ({ text: '', fileCount: 0, fileNames: [], chunkCount: 0, status });
+
   try {
     const supabase = createServerClient();
 
@@ -250,41 +35,73 @@ async function loadCourseMaterialsRAG(
       .eq('course_id', courseId);
 
     if (!count || count === 0) {
-      console.log('[RAG] No chunks found for course, falling back to full-text search');
-      return null;
+      console.log('[RAG] No chunks found for this course');
+      return empty('no_embeddings');
     }
 
-    // Embed the question and run a cosine similarity search
+    console.log(`[RAG] ${count} chunks available — running similarity search`);
+
+    type Chunk = { file_name: string; chunk_index: number; content: string; similarity?: number };
+
+    // Run similarity search + fetch intro chunks in parallel
     const questionEmbedding = await embedText(question);
     const embeddingStr = `[${questionEmbedding.join(',')}]`;
 
-    const { data: chunks, error } = await supabase.rpc('match_documents', {
-      query_embedding: embeddingStr,
-      match_course_id: courseId,
-      match_count: RAG_CHUNK_COUNT,
-    });
+    const [similarityResult, introResult] = await Promise.all([
+      supabase.rpc('match_documents', {
+        query_embedding: embeddingStr,
+        match_course_id: courseId,
+        match_count: RAG_CHUNK_COUNT,
+      }),
+      // Always pull the first 3 chunks of every file — these contain overview/ToC/intro content
+      supabase
+        .from('document_chunks')
+        .select('file_name, chunk_index, content')
+        .eq('course_id', courseId)
+        .lte('chunk_index', 2)
+        .order('file_name')
+        .order('chunk_index'),
+    ]);
 
-    if (error || !chunks || chunks.length === 0) {
-      console.warn('[RAG] match_documents returned no results:', error?.message);
-      return null;
+    if (similarityResult.error) {
+      console.warn('[RAG] match_documents error:', similarityResult.error.message);
+      return empty('error');
     }
 
-    console.log(`[RAG] Retrieved ${chunks.length} relevant chunks`);
+    const similarChunks = (similarityResult.data as Chunk[]) || [];
+    const introChunks   = (introResult.data   as Chunk[]) || [];
 
-    const fileNames = [...new Set(chunks.map((c: { file_name: string }) => c.file_name))];
-    const contextText = (chunks as { file_name: string; chunk_index: number; content: string }[])
+    // Merge: intro chunks first, then similarity results, deduplicated by file+index
+    const seen = new Set<string>();
+    const merged: Chunk[] = [];
+    for (const c of [...introChunks, ...similarChunks]) {
+      const key = `${c.file_name}::${c.chunk_index}`;
+      if (!seen.has(key)) { seen.add(key); merged.push(c); }
+    }
+
+    if (merged.length === 0) {
+      console.log('[RAG] match_documents returned 0 chunks');
+      return empty('no_match');
+    }
+
+    const topSim = similarChunks[0]?.similarity?.toFixed(3) ?? 'n/a';
+    console.log(`[RAG] ✅ ${merged.length} chunks (${introChunks.length} intro + ${similarChunks.length} similarity, top sim: ${topSim})`);
+
+    const fileNames = [...new Set(merged.map(c => c.file_name))];
+    const contextText = merged
       .map(c => `[Source: ${c.file_name}, section ${c.chunk_index + 1}]\n${c.content}`)
       .join('\n\n---\n\n');
 
     return {
       text: contextText,
       fileCount: fileNames.length,
-      fileNames: fileNames as string[],
-      chunkCount: chunks.length,
+      fileNames,
+      chunkCount: merged.length,
+      status: 'ok',
     };
   } catch (err) {
-    console.warn('[RAG] Retrieval failed, falling back to full-text search:', err);
-    return null;
+    console.warn('[RAG] Retrieval error:', err);
+    return empty('error');
   }
 }
 
@@ -339,66 +156,76 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Material loading: try RAG first, fall back to full-text keyword search ──
+    // ── Material loading: RAG only — never dump full file text ───────────────
     let context: string;
     let fileCount: number;
     let fileNames: string[];
     let hasMaterials: boolean;
-    let usedRAG = false;
 
     if (validatedCourseId) {
-      console.log(`[CHAT:${requestId}] 🔍 Attempting semantic retrieval (RAG)...`);
-      const ragResult = await loadCourseMaterialsRAG(message, validatedCourseId);
-      if (ragResult && ragResult.chunkCount > 0) {
-        context    = ragResult.text;
-        fileCount  = ragResult.fileCount;
-        fileNames  = ragResult.fileNames;
+      console.log(`[CHAT:${requestId}] 🔍 Running semantic retrieval (RAG)...`);
+      const rag = await loadCourseMaterialsRAG(message, validatedCourseId);
+
+      if (rag.status === 'ok') {
+        context      = rag.text;
+        fileCount    = rag.fileCount;
+        fileNames    = rag.fileNames;
         hasMaterials = true;
-        usedRAG    = true;
-        console.log(`[CHAT:${requestId}] ✅ RAG: ${ragResult.chunkCount} chunks from ${fileCount} file(s): ${fileNames.join(', ')}`);
+        console.log(`[CHAT:${requestId}] ✅ RAG: ${rag.chunkCount} chunks from ${rag.fileCount} file(s)`);
+      } else if (rag.status === 'no_embeddings') {
+        context      = 'Course files are still being processed. Please wait a moment and try again.';
+        fileCount    = 0;
+        fileNames    = [];
+        hasMaterials = false;
+        console.log(`[CHAT:${requestId}] ⚠️  No embeddings yet for this course`);
+      } else if (rag.status === 'no_match') {
+        // match_documents returned 0 rows — extremely rare with threshold removed
+        context      = 'No matching sections were found in the course materials for this query.';
+        fileCount    = 0;
+        fileNames    = [];
+        hasMaterials = false;
+        console.log(`[CHAT:${requestId}] ⚠️  RAG returned 0 chunks`);
       } else {
-        console.log(`[CHAT:${requestId}] ↩️  RAG unavailable, falling back to full-text search`);
-        const fallback = await loadCourseMaterials(fileIds);
-        hasMaterials = fallback.fileCount > 0 &&
-                       fallback.text !== 'No course materials uploaded yet.' &&
-                       fallback.text !== 'Error loading course materials.';
-        context   = hasMaterials ? selectRelevantContent(message, fallback.text, fallback.fileNames, MAX_CONTEXT_LENGTH) : fallback.text;
-        fileCount = fallback.fileCount;
-        fileNames = fallback.fileNames;
+        // error
+        context      = 'Course materials could not be retrieved due to a system error.';
+        fileCount    = 0;
+        fileNames    = [];
+        hasMaterials = false;
+        console.log(`[CHAT:${requestId}] ⚠️  RAG error`);
       }
     } else {
-      console.log(`[CHAT:${requestId}] 📚 No courseId — loading all materials (full-text search)`);
-      const fallback = await loadCourseMaterials(fileIds);
-      hasMaterials = fallback.fileCount > 0 &&
-                     fallback.text !== 'No course materials uploaded yet.' &&
-                     fallback.text !== 'Error loading course materials.';
-      context   = hasMaterials ? selectRelevantContent(message, fallback.text, fallback.fileNames, MAX_CONTEXT_LENGTH) : fallback.text;
-      fileCount = fallback.fileCount;
-      fileNames = fallback.fileNames;
+      context      = 'No course selected.';
+      fileCount    = 0;
+      fileNames    = [];
+      hasMaterials = false;
+      console.log(`[CHAT:${requestId}] 📚 No courseId — no materials loaded`);
     }
 
-    console.log(`[CHAT:${requestId}] ✅ Context ready: ${context.length} chars | RAG=${usedRAG}`);
+    console.log(`[CHAT:${requestId}] ✅ Context ready: ${context.length} chars`);
 
     // ── Analytics: track student questions (fire-and-forget) ──────────────────
     if (validatedCourseId && user?.role !== 'professor') {
-      const supabase = createServerClient();
-      supabase
-        .from('courses')
-        .select('name')
-        .eq('id', validatedCourseId)
-        .single()
-        .then(({ data }) => {
+      void (async () => {
+        try {
+          const supabase = createServerClient();
+          const { data } = await supabase
+            .from('courses')
+            .select('name')
+            .eq('id', validatedCourseId!)
+            .single();
           if (data) {
-            trackQuestion(
+            await trackQuestion(
               message,
               validatedCourseId!,
               data.name,
               sessionId || requestId,
               user?.id,
-            ).catch(() => {});
+            );
           }
-        })
-        .catch(() => {});
+        } catch {
+          // fire-and-forget — ignore errors
+        }
+      })();
     }
 
     // Generate personalized system prompt if user is logged in
@@ -512,30 +339,19 @@ Tone: Professional, knowledgeable, and supportive - like an experienced academic
     
     const isProfessor = user?.role === 'professor';
     
-    if (hasMaterials) {
-      if (isProfessor) {
-        userMessageContent = `
-=== AVAILABLE COURSE MATERIALS (${fileCount} files) ===
-Files loaded: ${fileNames.join(', ')}
+    if (isProfessor) {
+      // Professors: full unrestricted access — course materials provided as context but not a constraint
+      const materialsBlock = hasMaterials
+        ? `=== COURSE MATERIALS (${fileCount} files: ${fileNames.join(', ')}) ===\n${context}\n=== END OF COURSE MATERIALS ===\n\n`
+        : '';
+      userMessageContent = `${materialsBlock}Professor Question: ${message}
 
-${context}
+You have full unrestricted access to answer this question using your complete knowledge. Use the course materials above as helpful context when relevant, but feel free to draw on your full capabilities for any topic — including general subject matter, pedagogy, quiz generation, analytics insights, explanations, examples, and anything else that would help a professor.`;
 
-=== END OF COURSE MATERIALS ===
-
-Professor Question: ${message}
-
-INSTRUCTIONS: 
-1. Search through ALL the course materials above to find relevant information
-2. The materials include ${fileCount} files: ${fileNames.join(', ')}
-3. If the question is about student engagement, analytics, or quiz generation, provide helpful insights
-4. If the answer is found in the course materials, provide a complete response with citations
-5. If you cannot find the specific information after checking all files, let the professor know and suggest alternatives
-6. For quiz generation requests, create comprehensive questions based on the materials
-7. For analytics questions, provide insights about student learning patterns`;
-      } else {
-        userMessageContent = `
-=== AVAILABLE COURSE MATERIALS (${fileCount} files) ===
-Files loaded: ${fileNames.join(', ')}
+    } else if (hasMaterials) {
+      // Students: course materials as primary source; supplement with general knowledge ONLY for topics mentioned in materials
+      userMessageContent = `
+=== COURSE MATERIALS (${fileCount} files: ${fileNames.join(', ')}) ===
 
 ${context}
 
@@ -543,15 +359,19 @@ ${context}
 
 Student Question: ${message}
 
-CRITICAL INSTRUCTIONS: 
-1. Search through ALL the course materials above to find relevant information
-2. The materials include ${fileCount} files: ${fileNames.join(', ')}
-3. If the answer is found in the course materials, provide a complete response with citations (mention which file the information came from)
-4. If you cannot find the specific information after checking all files, you MUST ONLY respond with: "I don't find that information in the uploaded course materials. Please check your syllabus or consult your professor."
-5. DO NOT provide any answer, explanation, or general knowledge if the information is not in the course materials above
-6. DO NOT use your general knowledge to answer questions not covered in the uploaded materials`;
-      }
+INSTRUCTIONS:
+1. First check whether the student's question relates to a topic mentioned or covered in the course materials above
+2. If the topic IS present in the materials:
+   - Answer using the course materials as the primary source (cite file/section)
+   - Then supplement with any additional explanation, examples, or context from your knowledge that helps the student understand the topic better
+   - Give a thorough, complete answer — there is NO length limit, do not cut answers short, cover the topic fully with examples, step-by-step breakdowns, and any relevant details that aid understanding
+3. If the topic is NOT mentioned anywhere in the course materials:
+   - Respond with: "This topic doesn't appear to be covered in your course materials. Please check with your professor."
+   - Do NOT answer the question
+4. For broad questions ("what topics are covered?", "what is this course about?"), describe the subjects and themes visible across all retrieved sections in full detail`;
+
     } else {
+      // Students: no materials available at all
       userMessageContent = `Note: ${context}\n\nStudent Question: ${message}\n\nCRITICAL: You MUST ONLY respond with: "No course materials are available. Please upload course materials first." DO NOT provide any answer or explanation to the question.`;
     }
     messages.push({ role: 'user', content: userMessageContent });
@@ -571,7 +391,7 @@ CRITICAL INSTRUCTIONS:
             response = await portkey.chat.completions.create({
               model: modelToUse,
               messages: messages as any,
-              max_tokens: 4000,
+              max_tokens: 8000,
               temperature: 0.3,
               stream: true,
             });
@@ -599,7 +419,7 @@ CRITICAL INSTRUCTIONS:
                 body: JSON.stringify({
                   model: modelToUse,
                   messages: messages,
-                  max_tokens: 4000,
+                  max_tokens: 8000,
                   temperature: 0.3,
                   stream: true,
                 }),

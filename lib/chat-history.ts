@@ -94,6 +94,11 @@ export async function saveChatSession(session: ChatSession): Promise<void> {
     }));
     await supabase.from('messages').upsert(rows, { onConflict: 'id' });
   }
+
+  // Notify sidebar to refresh
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('chat-sessions-changed'));
+  }
 }
 
 // ── Delete Session ────────────────────────────────────────────────────────────

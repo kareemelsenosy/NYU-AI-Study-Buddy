@@ -68,7 +68,7 @@ export async function ensureBucket(): Promise<{ ok: boolean; bucket: string; mes
   return { ok: true, bucket: BUCKET, message: `Bucket '${BUCKET}' created` };
 }
 
-export async function uploadFile(file: File): Promise<FileMetadata> {
+export async function uploadFile(file: File, professorId: string, courseId: string): Promise<FileMetadata> {
   console.log(`[STORAGE] Uploading file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
 
   if (file.size > MAX_FILE_SIZE) {
@@ -83,8 +83,8 @@ export async function uploadFile(file: File): Promise<FileMetadata> {
 
   const supabase = createServerClient();
 
-  // Prefix with timestamp to avoid name collisions
-  const storagePath = `${Date.now()}-${file.name}`;
+  // Scope path to professor + course so files are naturally isolated
+  const storagePath = `${professorId}/${courseId}/${Date.now()}-${file.name}`;
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -117,9 +117,9 @@ export async function uploadFile(file: File): Promise<FileMetadata> {
   };
 }
 
-export async function uploadFiles(files: File[]): Promise<FileMetadata[]> {
+export async function uploadFiles(files: File[], professorId: string, courseId: string): Promise<FileMetadata[]> {
   console.log(`[STORAGE] Starting batch upload of ${files.length} files`);
-  const results = await Promise.all(files.map(file => uploadFile(file)));
+  const results = await Promise.all(files.map(file => uploadFile(file, professorId, courseId)));
   console.log(`[STORAGE] Batch upload completed: ${results.length} files`);
   return results;
 }

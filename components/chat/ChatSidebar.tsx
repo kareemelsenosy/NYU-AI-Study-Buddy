@@ -30,6 +30,7 @@ interface ChatSidebarProps {
   onDeleteSession: (sessionId: string) => void;
   onExportChat?: (sessionId: string) => void;
   onPrintChat?: (sessionId: string) => void;
+  userId?: string;
 }
 
 export function ChatSidebar({
@@ -39,6 +40,7 @@ export function ChatSidebar({
   onDeleteSession,
   onExportChat,
   onPrintChat,
+  userId,
 }: ChatSidebarProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,19 +50,20 @@ export function ChatSidebar({
 
   const loadSessions = useCallback(async () => {
     const allSessions = searchQuery
-      ? await searchChatSessions(searchQuery)
-      : await getAllChatSessions();
+      ? await searchChatSessions(searchQuery, userId)
+      : await getAllChatSessions(userId);
     setSessions(allSessions);
-  }, [searchQuery]);
+  }, [searchQuery, userId]);
 
   useEffect(() => {
     loadSessions();
-    // Reload when storage changes (from other tabs/windows)
-    const handleStorageChange = () => {
-      loadSessions();
+    const handleChange = () => loadSessions();
+    window.addEventListener('storage', handleChange);
+    window.addEventListener('chat-sessions-changed', handleChange);
+    return () => {
+      window.removeEventListener('storage', handleChange);
+      window.removeEventListener('chat-sessions-changed', handleChange);
     };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, [searchQuery, loadSessions]);
 
   const handleDelete = (e: React.MouseEvent, sessionId: string) => {

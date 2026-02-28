@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { X, FileDown, MessageSquareText, Users, Clock, Hash, Layers, TrendingUp, Calendar, BarChart3 } from 'lucide-react';
+import { X, FileDown, MessageSquareText, Users, Clock, Hash, Layers, TrendingUp, Calendar, BarChart3, Sparkles, AlertTriangle, Lightbulb, Target, Activity } from 'lucide-react';
 import { getSelectedCourseId, getCourse, getCoursesByProfessor } from '@/lib/course-management';
+import { getCurrentUser } from '@/lib/user-auth';
 import { getCourseAnalytics, getMostAskedQuestions, getQuestionActivity, getPeakActivityHours, getTopTopics } from '@/lib/analytics';
 // @ts-ignore - recharts has type issues with Next.js
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell, Area, AreaChart } from 'recharts';
@@ -58,9 +59,20 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
   const [topTopics, setTopTopics] = useState<Array<{ topic: string; count: number }>>([]);
   const [allCourses, setAllCourses] = useState<import('@/types').Course[]>([]);
   const [currentCourse, setCurrentCourse] = useState<import('@/types').Course | null>(null);
-  const [selectedCourseForAnalytics, setSelectedCourseForAnalytics] = useState<string | null>(getSelectedCourseId());
+  const [selectedCourseForAnalytics, setSelectedCourseForAnalytics] = useState<string | null>(
+    () => getSelectedCourseId(getCurrentUser()?.id)
+  );
+  const [aiInsights, setAiInsights] = useState<{
+    summary: string;
+    strugglingTopics: Array<{ topic: string; reason: string; frequency: string }>;
+    learningGaps: Array<{ gap: string; suggestion: string }>;
+    recommendations: string[];
+    engagementLevel: string;
+    engagementReason: string;
+  } | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
 
-  const currentCourseId = selectedCourseForAnalytics || getSelectedCourseId();
+  const currentCourseId = selectedCourseForAnalytics || getSelectedCourseId(getCurrentUser()?.id);
 
   const loadAnalytics = useCallback(async () => {
     setLoading(true);
@@ -108,6 +120,25 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
       };
     }
   }, [isOpen, loadAnalytics]);
+
+  const generateInsights = async () => {
+    if (!mostAskedQuestions.length || !currentCourse) return;
+    setLoadingInsights(true);
+    try {
+      const res = await fetch('/api/analytics-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questions: mostAskedQuestions, courseName: currentCourse.name }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiInsights(data.insights);
+      }
+    } catch (e) {
+      console.error('Failed to generate insights:', e);
+    }
+    setLoadingInsights(false);
+  };
 
   const downloadAnalyticsReport = () => {
     if (!analytics || !currentCourse) {
@@ -432,25 +463,113 @@ export function ProfessorAnalytics({ isOpen, onClose }: ProfessorAnalyticsProps)
                 )}
               </Card>
 
-              {/* All Topics */}
+              {/* AI Insights */}
               <Card className="p-6 shadow-lg">
-                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-[#57068C]" /> All Topics & Keywords
-                </h3>
-                <p className="text-sm text-muted-foreground mb-6">Topics students are asking about</p>
-                {topTopics.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {topTopics.map((topic, i) => (
-                      <span 
-                        key={i} 
-                        className="px-4 py-2 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium border border-purple-200 dark:border-purple-800"
-                      >
-                        {topic.topic} <span className="text-xs opacity-75">({topic.count})</span>
-                      </span>
-                    ))}
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xl font-semibold flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-[#57068C]" /> AI-Powered Insights
+                  </h3>
+                  <Button
+                    onClick={generateInsights}
+                    disabled={loadingInsights || mostAskedQuestions.length === 0}
+                    className="bg-[#57068C] hover:bg-[#6A0BA8] text-white rounded-xl"
+                    size="sm"
+                  >
+                    {loadingInsights ? (
+                      <><Sparkles className="h-4 w-4 mr-2 animate-pulse" />Analyzing...</>
+                    ) : (
+                      <><Sparkles className="h-4 w-4 mr-2" />Generate Insights</>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mb-6">AI analysis of student learning patterns and gaps</p>
+
+                {!aiInsights && !loadingInsights && (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Sparkles className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">Click &quot;Generate Insights&quot; to get an AI analysis of your students&apos; questions</p>
                   </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">No topics identified yet</p>
+                )}
+
+                {loadingInsights && (
+                  <div className="space-y-3 animate-pulse">
+                    {[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-xl bg-gray-100 dark:bg-gray-800" />)}
+                  </div>
+                )}
+
+                {aiInsights && !loadingInsights && (
+                  <div className="space-y-5">
+                    {/* Summary */}
+                    <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Activity className="h-4 w-4 text-[#57068C]" />
+                        <span className="font-semibold text-sm text-purple-800 dark:text-purple-300">Overview</span>
+                        <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-medium ${aiInsights.engagementLevel === 'high' ? 'bg-green-100 text-green-700' : aiInsights.engagementLevel === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                          {aiInsights.engagementLevel} engagement
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">{aiInsights.summary}</p>
+                    </div>
+
+                    {/* Struggling Topics */}
+                    {aiInsights.strugglingTopics?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlertTriangle className="h-4 w-4 text-orange-500" />
+                          <span className="font-semibold text-sm">Topics Students Struggle With</span>
+                        </div>
+                        <div className="space-y-2">
+                          {aiInsights.strugglingTopics.map((t, i) => (
+                            <div key={i} className="flex items-start gap-3 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                              <span className={`mt-0.5 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${t.frequency === 'high' ? 'bg-red-100 text-red-700' : t.frequency === 'medium' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {t.frequency}
+                              </span>
+                              <div>
+                                <p className="font-medium text-sm text-orange-900 dark:text-orange-100">{t.topic}</p>
+                                <p className="text-xs text-orange-700 dark:text-orange-300 mt-0.5">{t.reason}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Learning Gaps */}
+                    {aiInsights.learningGaps?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Target className="h-4 w-4 text-blue-500" />
+                          <span className="font-semibold text-sm">Learning Gaps Identified</span>
+                        </div>
+                        <div className="space-y-2">
+                          {aiInsights.learningGaps.map((g, i) => (
+                            <div key={i} className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <p className="font-medium text-sm text-blue-900 dark:text-blue-100">{g.gap}</p>
+                              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">💡 {g.suggestion}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recommendations */}
+                    {aiInsights.recommendations?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Lightbulb className="h-4 w-4 text-green-500" />
+                          <span className="font-semibold text-sm">Recommendations for You</span>
+                        </div>
+                        <div className="space-y-2">
+                          {aiInsights.recommendations.map((r, i) => (
+                            <div key={i} className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-600 text-white flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                              <p className="text-sm text-green-900 dark:text-green-100">{r}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </Card>
             </div>

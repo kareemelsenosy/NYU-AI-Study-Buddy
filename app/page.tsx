@@ -91,34 +91,18 @@ export default function Home() {
     setSelectedModel(modelId);
   };
 
-  // Check if user has files (but don't auto-show chat on reload)
-  useEffect(() => {
-    const checkFiles = async () => {
-      try {
-        const response = await fetch('/api/files');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.files && data.files.length > 0) {
-            setHasFiles(true);
-          }
-        }
-      } catch (error) {
-        console.error('[Home] Error checking files:', error);
-      }
-    };
-    checkFiles();
-  }, []);
 
   // go-to-chat and open-auth-modal are now handled via prop callbacks (no window events)
 
   const handleGetStarted = () => {
     // Different behavior based on role
     if (userRole === 'professor') {
-      // Professors go to course management
+      // Professors go to the inline upload materials view
       setShowFileManager(true);
       setShowWelcome(false);
       setShowHelp(false);
       setShowAnalytics(false);
+      setShowProfessorTools(false);
     } else if (userRole === 'student') {
       // Students go to course selection
       setShowFileManager(true);
@@ -194,12 +178,13 @@ export default function Home() {
   const handleGoToUpload = () => {
     // Different behavior based on role
     if (userRole === 'professor') {
-      // Professors go to file manager to upload materials
+      // Professors go to the inline upload materials view
       setShowFileManager(true);
       setShowHelp(false);
       setShowWelcome(false);
+      setShowProfessorTools(false);
     } else if (userRole === 'student') {
-      // Students go to course selection
+      // Students go to course selection modal
       setShowFileManager(true);
       setShowHelp(false);
       setShowWelcome(false);
@@ -384,85 +369,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* File Manager Modal - For Professors */}
-        {showFileManager && userRole === 'professor' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className="w-full max-w-5xl max-h-[90vh] overflow-auto"
-            >
-            <Card className="w-full bg-white dark:bg-gray-900 shadow-2xl">
-              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b p-6 flex items-center justify-between z-10">
-                <div>
-                  <h2 className="text-3xl font-bold text-[#57068C] dark:text-purple-400">
-                    Course Management
-                  </h2>
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    Create courses and upload materials for your students
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGoToChat}
-                    className="flex items-center gap-2"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    Go to Chat
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleCloseModal}
-                    className="rounded-full"
-                    aria-label="Close file manager"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                </div>
-              </div>
-              <div className="p-6 space-y-6">
-                {/* Course Manager */}
-                <div>
-                  <CourseManager 
-                    onCourseCreated={handleCourseCreated}
-                    onCourseSelected={(courseId) => {
-                      setSelectedCourseId(courseId);
-                    }}
-                  />
-                </div>
-                {/* File List — only shown after a course is selected (course-first UX) */}
-                {selectedCourseId ? (
-                  <div className="border-t pt-6">
-                    <FileList
-                      courseId={selectedCourseId}
-                      onGoToChat={() => {
-                        setShowFileManager(false);
-                        handleGoToChat();
-                      }}
-                      onFilesChange={() => {
-                        setHasFiles(true);
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="border-t pt-6">
-                    <div className="text-center py-10 text-muted-foreground">
-                      <Upload className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm font-medium">Select a course above to upload files</p>
-                      <p className="text-xs mt-1">Create a course first if you haven&apos;t already</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-            </motion.div>
-          </div>
-        )}
-
         {/* Course Selection Modal - For Students */}
         {showFileManager && userRole === 'student' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -508,7 +414,7 @@ export default function Home() {
           />
         )}
 
-        {/* Main Content — three mutually-exclusive views, animated */}
+        {/* Main Content — mutually-exclusive views, animated */}
         <AnimatePresence mode="wait" initial={false}>
         {showProfessorTools && userRole === 'professor' ? (
           <motion.div
@@ -521,7 +427,65 @@ export default function Home() {
           >
             <ProfessorTools />
           </motion.div>
-        ) : showWelcome && !showHelp && !showFileManager && !showAnalytics ? (
+        ) : showFileManager && userRole === 'professor' ? (
+          /* Upload Materials — inline full-page view for professors */
+          <motion.div
+            key="upload-materials"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="h-full overflow-auto"
+          >
+            <div className="max-w-5xl mx-auto p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-[#57068C] dark:text-purple-400">
+                    Upload Materials
+                  </h1>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    Create courses and upload materials for your students
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGoToChat}
+                  className="flex items-center gap-2"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Go to Chat
+                </Button>
+              </div>
+
+              <CourseManager
+                onCourseCreated={handleCourseCreated}
+                onCourseSelected={(courseId) => setSelectedCourseId(courseId)}
+              />
+
+              {selectedCourseId ? (
+                <div className="border-t pt-6">
+                  <FileList
+                    courseId={selectedCourseId}
+                    onGoToChat={() => {
+                      setShowFileManager(false);
+                      handleGoToChat();
+                    }}
+                    onFilesChange={() => setHasFiles(true)}
+                  />
+                </div>
+              ) : (
+                <div className="border-t pt-6">
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Upload className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-medium">Select a course above to upload files</p>
+                    <p className="text-xs mt-1">Create a course first if you haven&apos;t already</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ) : showWelcome && !showHelp && !showAnalytics ? (
           <motion.div
             key="welcome"
             initial={{ opacity: 0, y: 8 }}
@@ -580,6 +544,7 @@ export default function Home() {
                   onDeleteSession={handleDeleteSession}
                   onExportChat={handleExportChat}
                   onPrintChat={handlePrintChat}
+                  userId={user?.id}
                 />
               </div>
             )}
